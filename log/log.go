@@ -30,9 +30,8 @@ func Panice(err error, v ...interface{}) {
 func Fatal(v ...interface{}) {
   if sw != nil {
     sw.Crit(fmt.Sprint(v...))
-  } else {
-    log.Fatal(v...)
   }
+  log.Fatal(v...)
 }
 
 func Fatale(err error, v ...interface{}) {
