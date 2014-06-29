@@ -4,6 +4,11 @@ import "net"
 import "os"
 import "errors"
 
+func Init() error {
+  syscall.Umask(0)
+  return nil
+}
+
 func Daemonize() error {
   //   null_fd = open("/dev/null", O_WRONLY);
   null_f, err := os.OpenFile("/dev/null", os.O_RDWR, 0)

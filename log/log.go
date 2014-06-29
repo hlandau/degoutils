@@ -11,22 +11,23 @@ func OpenSyslog(name string) error {
     return err
   }
   sw = s
+  return nil
 }
 
-func LogPanic(v ...interface{}) {
+func Panic(v ...interface{}) {
   if sw != nil {
     sw.Crit(fmt.Sprint(v...))
   }
   log.Panic(v...)
 }
 
-func LogPanice(err error, v ...interface{}) {
+func Panice(err error, v ...interface{}) {
   if err != nil {
-    LogPanic(err, v...)
+    Panic(append([]interface{}{err}, v...))
   }
 }
 
-func LogFatal(v ...interface{}) {
+func Fatal(v ...interface{}) {
   if sw != nil {
     sw.Crit(fmt.Sprint(v...))
   } else {
@@ -34,13 +35,13 @@ func LogFatal(v ...interface{}) {
   }
 }
 
-func LogFatale(err error, v ...interface{}) {
+func Fatale(err error, v ...interface{}) {
   if err != nil {
-    LogFatal(err, v...)
+    Fatal(append([]interface{}{err}, v...))
   }
 }
 
-func LogError(v ...interface{}) {
+func Error(v ...interface{}) {
   if sw != nil {
     sw.Err(fmt.Sprint(v...))
   } else {
@@ -48,13 +49,13 @@ func LogError(v ...interface{}) {
   }
 }
 
-func LogErrore(err error, v ...interface{}) {
+func Errore(err error, v ...interface{}) {
   if err != nil {
-    LogError(err, v...)
+    Error(append([]interface{}{err}, v...))
   }
 }
 
-func LogWarning(v ...interface{}) {
+func Warning(v ...interface{}) {
   if sw != nil {
     sw.Warning(fmt.Sprint(v...))
   } else {
@@ -62,13 +63,13 @@ func LogWarning(v ...interface{}) {
   }
 }
 
-func LogWarninge(err error, v ...interface{}) {
+func Warninge(err error, v ...interface{}) {
   if err != nil {
-    LogWarning(err, v...)
+    Warning(append([]interface{}{err}, v...))
   }
 }
 
-func LogNotice(v ...interface{}) {
+func Notice(v ...interface{}) {
   if sw != nil {
     sw.Notice(fmt.Sprint(v...))
   } else {
@@ -76,13 +77,13 @@ func LogNotice(v ...interface{}) {
   }
 }
 
-func LogNoticee(err error, v ...interface{}) {
+func Noticee(err error, v ...interface{}) {
   if err != nil {
-    LogNotice(err, v...)
+    Notice(append([]interface{}{err}, v...))
   }
 }
 
-func LogInfo(v ...interface{}) {
+func Info(v ...interface{}) {
   if sw != nil {
     sw.Info(fmt.Sprint(v...))
   } else {
@@ -90,13 +91,13 @@ func LogInfo(v ...interface{}) {
   }
 }
 
-func LogInfoe(err error, v ...interface{}) {
+func Infoe(err error, v ...interface{}) {
   if err != nil {
-    LogInfo(err, v...)
+    Info(append([]interface{}{err}, v...))
   }
 }
 
-func LogDebug(v ...interface{}) {
+func Debug(v ...interface{}) {
   if sw != nil {
     sw.Debug(fmt.Sprint(v...))
   } else {
@@ -104,8 +105,8 @@ func LogDebug(v ...interface{}) {
   }
 }
 
-func LogDebuge(err error, v ...interface{}) {
+func Debuge(err error, v ...interface{}) {
   if err != nil {
-    LogDebug(err, v...)
+    Debug(append([]interface{}{err}, v...))
   }
 }
