@@ -1,4 +1,4 @@
 degoutils
 =========
 
-Go utilities
+Miscellaneous Go utilities for writing daemons.
