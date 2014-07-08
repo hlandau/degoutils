@@ -1,4 +1,127 @@
 // A utility for automatically connecting to services using SRV records, TLS, ZeroMQ, etc.
+//
+// Connection Method Description String
+//
+// A connection method descripton string consists of a series of application
+// name descriptors, which correspond to a scheme specified in an URL.
+//
+//   XALPHA = ALPHA / "_" / "-"
+//   NAME = XALPHA *(XALPHA / DIGIT)
+//   NZDIGIT = %x31-39
+//   port = NZDIGIT *DIGIT
+//   PALPHA = XALPHA / "+"
+//   PNAME = ALPHA *(PALPHA / DIGIT)
+//
+//   cmds = app *(1*SP app)
+//
+//   app  = PNAME "=" [meta_method ";"] *(method ";") method
+//   method = conn_method / "fail"
+//   meta_method = "@" app_name
+//   conn_method = (app_proto_name / port) [implicit_method] explicit_method
+//   implicit_method = "$" implicit_method_name
+//   explicit_method = "+" explicit_method_name
+//
+//   app_proto_name = NAME
+//   app_name = NAME
+//
+//   implicit_method_name = "tls" / "zmq"
+//     // (all allocated security method names shall also match NAME)
+//   explicit_method_name = "tcp" / "udp" / "sctp"
+//     // (all allocated security method names shall also match NAME)
+//
+// The principal difference between implicit methods and explicit methods is
+// that implicit methods are not used in the DNS SRV hierarchy.
+// Always use the method name sigil specified above for a given method name.
+//
+// Meta methods support the following lookup convention to correct for
+// deficiencies in the design of the DNS SRV system:
+//
+// DNS SRV looks up *application protocol name/transport protocol name* pairs.
+// However what we really want to look up is an *application/service name*,
+// which may be provided via many different *application and transport
+// protocols*. (For example, the World Wide Web service may run over HTTP or
+// SPDY, so there is a distinction between the WWW service and HTTP, which is a
+// specific means of realisation.)
+//
+// In order to correct this shortcoming, the following scheme is proposed:
+//
+// An application/service name is looked up by prepending an underscore to the
+// service name, then appending "._svc." followed by the domain name, and doing
+// a lookup for PTR records. Each PTR record, if present, will point to a DNS
+// SRV record name. For example:
+//
+//   _www._svc  IN PTR  _spdys._tcp
+//   _www._svc  IN PTR  _https._tcp
+//   _www._svc  IN PTR  _http._tcp
+//
+//   _spdys._tcp IN SRV ...
+//   _https._tcp IN SRV ...
+//   _http._tcp  IN SRV ...
+//
+// Because PTR records cannot be used to express a preference, the preference
+// of each protocol is determined by the application. This is desirable anyway.
+//
+// Examples:
+//
+//   "www=https$tls+tcp;http+tcp;443$tls+tcp;80+tcp"
+//   Meaning:
+//     To connect to an URL of scheme www, first try SRV at _https._tcp and use
+//     TLS. Failing that, try SRV at _http._tcp, plain TCP. Failing that, try a
+//     direct connection to the hostname on port 443 using TLS and TCP. Failing
+//     that, try a direct connection to the hostname on port 80 using TCP.
+//     Failing that, fail.
+//
+//   "www=@www;spdy$tls+tcp;https$tls+tcp;http+tcp;443$tls+tcp;80+tcp"
+//   Meaning:
+//     As above, but the PTR lookup scheme above is done for the service name
+//     "www". The results are used to crop the SRV lookup methods specified.
+//     SRV methods specified in the PTR results but not in the CMDS will not be
+//     used.
+//
+//   "zorg=@zorg;zorgzmq$zmq+tcp;11011$zmq+tcp"
+//
+// If an URL is specified with a port, this is interpreted using the last
+// method specified in the CMDS for that scheme. The port number specified in
+// the method is substituted for the port number specified by the user. Thus
+// when a port number is specified it customizes the last method entry. If the
+// last method entry does not name a port, connection fails; the URL cannot be
+// used with an explicitly specified port.
+//
+// Connection fails implicitly when the end of the method list is reached.
+// However failure can also be specified explicitly using the "fail" method.
+// This is useful if a different method should be used when a port is
+// explicitly specified, as explicit port specification always customizes the
+// last entry, even if it is after a fail method.
+// If fail is specified as the last entry, explicit port specification is not
+// possible, because explicit port specification can only occur when the last
+// entry names a port.
+//
+// All SRV and PTR methods fail when an IP address is specified.
+// In some cases failure of a SRV method may result in execution of the methods
+// not continuing, e.g. when a non-zero number of SRV records exists for a
+// method but connection to all of them fails.
+//
+// If a ZMQ connection occurs, the following authentication methods are
+// attempted, in order:
+//   CURVE
+//     Attempted if a "username" is specified in the URL and a client private
+//     key is specified in the ConnectConfig. The "username" must be the public
+//     key in lowercase base32 encoding with no base32 padding.
+//     e.g. scheme://urmbzh7aqu5kqojvrywowq6mfw74blighkxz4j5fcrqmbrhh3rua@hostname
+//
+//   PLAIN
+//     Attempted if a username and password are specified in the URL in the
+//     form scheme://username:password@hostname
+//   NULL
+//     Attempted if no other method succeeds.
+//
+// If connection is made via ZMQ, the path in the URL is passed to ZMQ as the
+// resource string.
+//
+// TODO
+//
+// Currently not implemented: _svc, ZMQ, SCTP.
+//
 package net
 
 import zmq "github.com/pebbe/zmq4"
