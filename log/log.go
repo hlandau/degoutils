@@ -1,10 +1,27 @@
+// Helper functions for logging.
+//
+// The functions ending in "e" take an error argument, and only do anything if
+// that argument is non-nil. This allows for a simple usage style for
+// errors which are beyond the expectations of the program:
+//
+//   foo, err := DoSomething()
+//   Fatale(err, "couldn't do something")
+//
+//   // (execution continues so long as err was nil)
 package log
+
 import "log"
 import "log/syslog"
 import "fmt"
 
 var sw *syslog.Writer
 
+// Open a connection to UNIX syslog.
+//
+// The name should be the name of the daemon. Once syslog is opened, all
+// messages logged through this package will also be logged to syslog.
+//
+// The logging facility used is "daemon".
 func OpenSyslog(name string) error {
   s, err := syslog.New(syslog.LOG_DAEMON|syslog.LOG_DEBUG, name)
   if err != nil {

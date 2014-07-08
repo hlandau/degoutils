@@ -1,14 +1,28 @@
+// Functions to assist with the writing of UNIX-style daemons in go.
 package daemon
+
 import "syscall"
 import "net"
 import "os"
 import "errors"
 
+// Initialises a daemon with recommended values.
+//
+// Currently, this only calls umask(0).
 func Init() error {
   syscall.Umask(0)
   return nil
 }
 
+// Daemonizes but doesn't fork.
+//
+// The stdin, stdout and stderr fds are remapped to /dev/null.
+// setsid is called.
+//
+// The process changes its current directory to /.
+//
+// If you intend to call DropPrivileges, call it after calling this function,
+// as /dev/null will no longer be available after privileges are dropped.
 func Daemonize() error {
   //   null_fd = open("/dev/null", O_WRONLY);
   null_f, err := os.OpenFile("/dev/null", os.O_RDWR, 0)
@@ -60,6 +74,17 @@ func Daemonize() error {
   return nil
 }
 
+// Drops privileges to the specified UID and GID.
+// This function does nothing and returns no error if all E?[UG]IDs are nonzero.
+//
+// The process is chrooted into /var/empty, which must exist. The function
+// tests that privilege dropping has been successful by attempting to
+// setuid(0), which must fail.
+//
+// The current directory is set to / inside the chroot.
+//
+// The function ensures that /etc/hosts and /etc/resolv.conf are loaded before
+// chrooting, so name service should continue to be available.
 func DropPrivileges(UID, GID int) error {
   if syscall.Getuid() != 0 && syscall.Geteuid() != 0 && syscall.Getgid() != 0 && syscall.Getegid() != 0 {
     return nil

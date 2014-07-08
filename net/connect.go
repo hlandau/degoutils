@@ -1,4 +1,6 @@
+// A utility for automatically connecting to services using SRV records, TLS, ZeroMQ, etc.
 package net
+
 import zmq "github.com/pebbe/zmq4"
 import "errors"
 import "net/url"
@@ -8,10 +10,22 @@ import "github.com/hlandau/degoutils/log"
 import "fmt"
 
 const (
+  // An event of no particular external significance, but which provides
+  // updated progress information.
   CET_ProgressInfo    = 1
+
+  // The Connector has finished connecting and a socket is now available.
   CET_Connected       = 2
+
+  // A single method tried in a single attempt has failed. (Each attempt may
+  // involve trying several methods.)
   CET_MethodFailure   = 3
+
+  // The Connector has failed a single attempt; the number of attempts has been
+  // incremented.
   CET_AttemptFailure  = 4
+
+  // The Connector has exhausted all attempts and has given up.
   CET_FinalFailure    = 5
   )
 
@@ -20,35 +34,73 @@ type ConnEx interface {
 }
 
 type ConnectionEvent struct {
+  // The type of the connection event. See the CET_* constants.
   Type int
+
   TransportLayerConnectionAttemptNo int
   ServiceAttemptNo int
+
+  // A string summarising the task currently being attempted or just completed.
   ProgressInfo string
+
+  // CET_Connected only: The successfully created connection.
   Conn ConnEx
 }
 
 type Connector interface {
+  // Yields the underlying channel used to receive ConnectionEvents from the
+  // connection process goroutine.
   Chan() chan ConnectionEvent
+
+  // Wait for the next ConnectionEvent and return it.
+  //
+  // This function will fail with an error if the Connector is stale. The Connector becomes
+  // stale after a Final Failure or Connected ConnectionEvent. This is necessary
+  // because no further events will be sent after such an event, so waiting for
+  // an event would simply cause the caller to wait forever.
   Event() (ConnectionEvent, error)
+
+  // Wait for a socket to become available or for connection to fail finally.
+  //
+  // Note that if an unlimited number of retries are configured and connection
+  // never succeeds, this function may never return.
+  //
+  // The Connector is stale once this function returns.
   Sock() (ConnEx, error)
+
+  // Abort the connection effort at the next available opportunity.
+  //
+  // A FinalFailure event will be delivered when abortion is complete.
   Abort()
 }
 
+// Function prototype for the ZMQ Configurator function. See ConnectConfig.
 type ZMQConfigurator func(sock *zmq.Socket) error
 
 type ConnectConfig struct {
-  RetryConfig
+  // Controls how many times connection will be attempted, and the delay
+  // between each attempt.
+  RetryConfig         RetryConfig
+
+  // The Connection Method Description String.
   MethodDescriptor    string
 
+  // The Dialer used to initiate actual Transport-layer connections.
   Dialer              gnet.Dialer
+
+  // The TLS Configuration used for any TLS connection made.
   TLSConfig          *tls.Config
 
+  // If ZeroMQ is used, this function is called on any ZeroMQ socket
+  // constructed immediately after its construction. This allows you to set
+  // arbitrary settings on that socket. May be nil, in which case no function
+  // is called.
   ZMQConfigurator     ZMQConfigurator
 
-  CurveZMQPrivateKey  string // z85
-  ZMQNoNullAuth       bool
-  ZMQNoPlainAuth      bool
-  zmqIdentity         string
+  //CurveZMQPrivateKey  string // z85
+  //ZMQNoNullAuth       bool
+  //ZMQNoPlainAuth      bool
+  //zmqIdentity         string
 }
 
 type connector struct {
@@ -60,6 +112,7 @@ type connector struct {
   cc ConnectConfig
   cmdsApp cmdsApp
   inhibitFallback bool
+  stale bool
 }
 
 func (self *connector) Chan() chan ConnectionEvent {
@@ -67,12 +120,26 @@ func (self *connector) Chan() chan ConnectionEvent {
 }
 
 func (self *connector) Event() (ConnectionEvent, error) {
+  if self.stale {
+    return nil, errors.New("Connector is stale.")
+  }
+
   x := <-self.ch
+
+  if x.Type == CET_FinalFailure {
+    self.finalFailureReceived = true
+  }
+
   return x, nil
 }
 
 func (self *connector) Sock() (c ConnEx, err error) {
   var e ConnectionEvent
+
+  if self.finalFailureReceived {
+    return nil, errors.New("Final failure already received; Connector is stale.")
+  }
+
   for {
     e, err = self.Event()
     if err != nil {
@@ -80,10 +147,12 @@ func (self *connector) Sock() (c ConnEx, err error) {
     }
     if e.Type == CET_Connected {
       c = e.Conn
+      self.finalFailureReceived = true
       return
     }
     if e.Type == CET_FinalFailure {
       err = errors.New("final connect failure")
+      self.finalFailureReceived = true
       return
     }
   }
@@ -113,12 +182,46 @@ func (self *connector) asyncNotifyInterim(t int, progressInfo string) {
   self.ch <- ev
 }
 
-func (self *connector) asyncConnectMethodPort(transport string, hostname string, port int) (err error) {
+func (self *connector) asyncConnectMethodPort(m cmdsMethod, hostname string, port int) (err error) {
   cs := fmt.Sprintf("%s:%d", hostname, port)
   log.Info("Attempting to connect to hostname: ", cs)
-  conn, err := self.cc.Dialer.Dial(transport, cs)
+  conn, err := self.cc.Dialer.Dial(m.explicitMethodName, cs)
   if err != nil {
     return err
+  }
+
+  switch m.implicitMethodName {
+    case "tls":
+      // Wrap the connection in TLS.
+      var tls_config tls.Config
+      if self.cc.TLSConfig != nil {
+        tls_config = *self.cc.TLSConfig
+      }
+
+      if tls_config.ServerName == "" {
+        tls_config.ServerName = self.urlHostname
+      }
+
+      tls_c := tls.Client(conn, &tls_config)
+      err = tls_c.Handshake()
+      if err != nil {
+        return
+      }
+      log.Info("TLS handshake completed OK")
+
+      cstate := tls_c.ConnectionState()
+      log.Info(fmt.Sprintf("TLS State: %+v", cstate))
+
+      conn = tls_c
+
+    case "zmq":
+      // ...
+
+    case "":
+      // Nothing to do.
+
+    default:
+      panic("unreachable")
   }
 
   self.cc.RetryConfig.Reset()
@@ -159,7 +262,7 @@ func (self *connector) asyncConnectMethodSRV(m cmdsMethod) error {
       continue
     }
 
-    err := self.asyncConnectMethodPort(m.explicitMethodName, addrs[i].Target, int(addrs[i].Port))
+    err := self.asyncConnectMethodPort(m, addrs[i].Target, int(addrs[i].Port))
     if err != nil {
       continue
     }
@@ -197,7 +300,7 @@ func (self *connector) asyncConnectMethod(m cmdsMethod) (err error) {
     if self.urlPort != -1 {
       port = self.urlPort
     }
-    err = self.asyncConnectMethodPort(m.explicitMethodName, self.urlHostname, port)
+    err = self.asyncConnectMethodPort(m, self.urlHostname, port)
     return
   }
 
@@ -268,6 +371,14 @@ func (self *connector) asyncConnect() {
   self.asyncNotifyInterim(CET_FinalFailure, "Retry limit exceeded")
 }
 
+// Like Connect, but provides a more advanced, asynchronous interface.
+//
+// Yields either an error (for immediate failures) or a Connector interface,
+// which can be used to receive events indicating the progress of the
+// connection effort.
+//
+// The Connector interface wraps a Channel yielding ConnectionEvents.
+// The interface can also be used to abort the connection effort.
 func ConnectEx(us string, cc ConnectConfig) (ctor Connector, err error) {
   u, err := url.Parse(us)
   if err != nil {
@@ -301,6 +412,25 @@ func ConnectEx(us string, cc ConnectConfig) (ctor Connector, err error) {
   return
 }
 
+// This connects to an URL using the information specified in ConnectConfig.
+// It's like Dial on steroids. It can automatically do SRV lookups and fallback
+// to a conventional hostname lookup as appropriate. It can also automatically
+// wrap the connection in TLS or ZeroMQ/CurveZMQ where appropriate.
+//
+// An open socket or error is returned.
+//
+// The connection process is primarily controlled via a Connection Method
+// Description String, which describes how to connect to various URL schemes.
+//
+// This function will automatically keep trying to connect, based on the retry
+// configuration specified in the ConnectConfig. If the retry configuration
+// proscribes a limited number of attempts, the function returns after the
+// maximum number of attempts has been made. An exponential backoff is used to
+// delay each successive attempt.
+//
+// If you require more detailed information on the connection process (for
+// example, because you would like to log a message whenever an attempt fails),
+// use ConnectEx.
 func Connect(us string, cc ConnectConfig) (ConnEx, error) {
   ctor, err := ConnectEx(us, cc)
   if err != nil {
