@@ -1,0 +1,7 @@
+© 2010 Jack Palevich          BSD License  (Taipei-Torrent)
+© 2013 John Beisley           MIT License  (huin/goupnp)
+© 2013 John Howard Palevich   Apache v2 License (go-nat-pmp)
+© 2014 Hugo Landau            MIT License
+
+
+

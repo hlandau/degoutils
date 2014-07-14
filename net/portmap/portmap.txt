@@ -1,0 +1,98 @@
+package fwneg
+
+const NATPMP_R2H_PORT = 5350
+const NATPMP_H2R_PORT = 5351
+const NATPMP_VERSION = 0
+
+// NAT-PMP v0 Packet Format:
+//   UDP Datagram to Port 5351
+//   All numeric fields are in network order.
+//
+//   1  ui8   Version (0)
+//   1  ui8   RTTT TTTT
+//              R: Packet is response from server
+//              T: Type
+//
+//   Packet Types:
+//     Type 0:  GetExternalAddress
+//       Request:
+//         No payload.
+//       Response:
+//         2  ui2  Result Code
+//         4  ui4  Seconds since Epoch
+//         4  ui4  External IPv4 Address
+//     Type 1: MapUDP
+//     Type 2: MapTCP
+//       Request:
+//         2  ui2  Reserved (0/ignore)
+//         2  ui2  Internal Port
+//         2  ui2  Suggested External Port
+//         4  ui4  Requested Lifetime in Seconds
+//       Response:
+//         2  ui2  Result Code
+//         4  ui4  Seconds since Epoch
+//         2  ui2  Internal Port
+//         2  ui2  Mapped External Port
+//         4  ui4  Mapping Lifetime in Seconds
+//
+//  Result Codes:
+//    0 - Success
+//    1 - Unsupported Version
+//    2 - Not Authorized/Refuse
+//    3 - Network Failure
+//    4 - Out of resources
+//    5 - Unsupported opcode
+//
+//  An Unsupported Version response contains only the result code and the
+//  seconds since epoch fields.
+//
+// Port Control Protocol (basically NAT-PMP v2):
+//   UDP Datagram to Port 5351
+//   All numeric fields are in network byte order.
+//
+//   Request:
+//   1  ui1    Version (2)
+//   1  ui1    RTTT TTTT
+//               R: Packet is response from server
+//               T: Type
+//   4  ui4    Requested Lifetime
+//  16         PCP Client IP Address
+//             [Type-specific information]
+//             [PCP Options]
+//
+//  Response:
+//  1  ui1     Version (2)
+//  1  ui1     RTTT TTTT
+//               R: Packet is response from server
+//               T: Type
+//  1  ui1     Reserved (0/ignore)
+//  1  ui1     Result Code
+//  4  ui4     Lifetime
+//  4  ui4     Epoch Time
+//  12 ...     Reserved (0/ignore)
+//             [Type-specific information]
+//             [PCP Options]
+//
+//  Packet Types:
+//    MAP:
+//      Request:
+//        12       Mapping Nonce
+//         1  ui1  Protocol (6: TCP, 17: UDP, 0: All)
+//         3  ...  Reserved (0/ignore)
+//         2  ui2  Internal Port
+//         2  ui2  Suggested External Port
+//        16  ui16 Suggested External IP Address
+//      Response:
+//        12       Mapping Nonce
+//         1  ui1  Protocol
+//         3  ...  Reserved (0/ignore)
+//         2  ui2  Internal Port
+//         2  ui2  Assigned External Port
+//        16  ui16 Assigned External IP Address
+//  Option Syntax:
+//    TLV:
+//      1  ui1   Option Code
+//      1  ui1   Reserved (0/ignore)
+//      2  ui2   Option Data Length
+//      ...      Option Data
+
