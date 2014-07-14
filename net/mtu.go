@@ -83,3 +83,18 @@ func ReadDatagram(c net.Conn) (buf []byte, err error) {
 
   return
 }
+
+func ReadDatagramFromUDP(c *net.UDPConn) (buf []byte, addr *net.UDPAddr, err error) {
+  bufx := make([]byte, maxDatagramSize+1)
+  n, addr, err := c.ReadFromUDP(bufx)
+  if n > maxDatagramSize {
+    err = WasTruncated
+    return
+  }
+
+  if n > 0 {
+    buf = bufx[0:n]
+  }
+
+  return
+}

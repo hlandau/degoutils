@@ -9,5 +9,5 @@ func ErrorIsPortUnreachable(e error) bool {
     return false
   }
   
-  return xo.Err == "connection refused" // XXX
+  return xo.Err.Error() == "connection refused" // XXX
 }

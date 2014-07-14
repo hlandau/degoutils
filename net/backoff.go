@@ -21,7 +21,8 @@ type RetryConfig struct {
   // maximum delay will be reached after 5 attempts have been made.
   MaxDelayAfterTries int
 
-  currentTry int
+  // The current try. You should not need to set this yourself.
+  CurrentTry int
 }
 
 // Initialises any nil field in RetryConfig with sensible defaults. You
@@ -43,14 +44,14 @@ func (rc *RetryConfig) InitDefaults() {
 func (rc *RetryConfig) GetStepDelay() int {
   rc.InitDefaults()
 
-  if rc.MaxTries != 0 && rc.currentTry >= rc.MaxTries {
+  if rc.MaxTries != 0 && rc.CurrentTry >= rc.MaxTries {
     return 0
   }
 
   // [from backoff.c]
   k := math.Log2(float64(rc.MaxDelay)/float64(rc.InitialDelay)) / float64(rc.MaxDelayAfterTries)
-  d := int(float64(rc.InitialDelay)*math.Exp2(float64(rc.currentTry)*k))
-  rc.currentTry += 1
+  d := int(float64(rc.InitialDelay)*math.Exp2(float64(rc.CurrentTry)*k))
+  rc.CurrentTry += 1
 
   if d > rc.MaxDelay {
     d = rc.MaxDelay
@@ -62,5 +63,5 @@ func (rc *RetryConfig) GetStepDelay() int {
 // Sets the internal try counter to zero; the next delay returned will be
 // InitialDelay again.
 func (rc *RetryConfig) Reset() {
-  rc.currentTry = 0
+  rc.CurrentTry = 0
 }
