@@ -1,5 +1,6 @@
 package net
 import "math"
+import "time"
 
 // Expresses a backoff and retry specification.
 //
@@ -41,11 +42,11 @@ func (rc *RetryConfig) InitDefaults() {
 }
 
 // Gets the next delay in milliseconds and increments the internal try counter.
-func (rc *RetryConfig) GetStepDelay() int {
+func (rc *RetryConfig) GetStepDelay() time.Duration {
   rc.InitDefaults()
 
   if rc.MaxTries != 0 && rc.CurrentTry >= rc.MaxTries {
-    return 0
+    return time.Duration(0)
   }
 
   // [from backoff.c]
@@ -57,7 +58,12 @@ func (rc *RetryConfig) GetStepDelay() int {
     d = rc.MaxDelay
   }
 
-  return d
+  return time.Duration(d)*time.Millisecond
+}
+
+// Sleep for the duration returned by GetStepDelay().
+func (rc *RetryConfig) Sleep() {
+  time.Sleep(time.GetStepDelay())
 }
 
 // Sets the internal try counter to zero; the next delay returned will be
