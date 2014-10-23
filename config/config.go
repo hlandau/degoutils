@@ -148,6 +148,15 @@ func (cc *Configurator) parseFatal(target interface{}, noVars bool) {
         if !noVars {
           flag.StringVar( (*string)(unsafe.Pointer(vf.UnsafeAddr())), name, dflt, usage)
         }
+      case reflect.Bool:
+        dfltb, err := strconv.ParseBool(dflt)
+        if err != nil {
+          panic("bad default value")
+        }
+        vf.SetBool(dfltb)
+        if !noVars {
+          flag.BoolVar( (*bool)(unsafe.Pointer(vf.UnsafeAddr())), name, dfltb, usage)
+        }
       default:
         panic("unsupported type")
     }
