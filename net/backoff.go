@@ -63,7 +63,7 @@ func (rc *RetryConfig) GetStepDelay() time.Duration {
 
 // Sleep for the duration returned by GetStepDelay().
 func (rc *RetryConfig) Sleep() {
-  time.Sleep(time.GetStepDelay())
+  time.Sleep(rc.GetStepDelay())
 }
 
 // Sets the internal try counter to zero; the next delay returned will be

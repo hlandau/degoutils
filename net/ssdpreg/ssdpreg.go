@@ -36,6 +36,8 @@ func loop() {
     svc.ST = ev.ST
     svc.Location = ev.Location
     svc.LastSeen = time.Now()
+
+		log.Info("Registering SSDP service: ", svc)
   }
 }
 

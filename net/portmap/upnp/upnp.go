@@ -12,6 +12,7 @@ import "github.com/hlandau/degoutils/log"
 import "fmt"
 import "math/rand"
 import "strings"
+import "time"
 
 const upnpDeviceNS = "urn:schemas-upnp-org:device-1-0"
 
@@ -211,7 +212,7 @@ func protocolString(protocol int) string {
 }
 
 func MapPort(svc ssdpreg.SSDPService, protocol int, internalPort uint16,
-             externalPort uint16, name string, duration uint32) (actualExternalPort uint16, err error) {
+             externalPort uint16, name string, duration time.Duration) (actualExternalPort uint16, err error) {
   wurl, err := getWANIPControlURL(svc)
 
   if externalPort == 0 {
@@ -229,7 +230,7 @@ func MapPort(svc ssdpreg.SSDPService, protocol int, internalPort uint16,
 
   protocolStr := protocolString(protocol)
 
-  s := fmt.Sprintf(`<u:AddPortMapping xmlns:u="urn:schemas-upnp-org:service:WANIPConnection:1"><NewRemoteHost></NewRemoteHost><NewExternalPort>%d</NewExternalPort><NewProtocol>%s</NewProtocol><NewInternalPort>%d</NewInternalPort><NewInternalClient>%s</NewInternalClient><NewEnabled>1</NewEnabled><NewPortMappingDescription>%s</NewPortMappingDescription><NewLeaseDuration>%d</NewLeaseDuration></u:AddPortMapping>`, externalPort, protocolStr, internalPort, selfIP.String(), name, duration)
+  s := fmt.Sprintf(`<u:AddPortMapping xmlns:u="urn:schemas-upnp-org:service:WANIPConnection:1"><NewRemoteHost></NewRemoteHost><NewExternalPort>%d</NewExternalPort><NewProtocol>%s</NewProtocol><NewInternalPort>%d</NewInternalPort><NewInternalClient>%s</NewInternalClient><NewEnabled>1</NewEnabled><NewPortMappingDescription>%s</NewPortMappingDescription><NewLeaseDuration>%d</NewLeaseDuration></u:AddPortMapping>`, externalPort, protocolStr, internalPort, selfIP.String(), name, uint32(duration.Seconds()))
 
   res, err := soapRequest(wurl.String(), "AddPortMapping", s)
   if err != nil {
@@ -257,6 +258,53 @@ func UnmapPort(svc ssdpreg.SSDPService, protocol int, externalPort uint16) (err 
     return
   }
   defer res.Body.Close()
+
+  return
+}
+
+type xSoapEnvelope struct {
+  XMLName xml.Name  `xml:"Envelope"`
+  Body    xSoapBody `xml:"Body"`
+}
+
+type xSoapBody struct {
+  XMLName xml.Name  `xml:"Body"`
+  Data    []byte    `xml:",innerxml"`
+}
+
+type xGetExternalAddrResponse struct {
+  XMLName xml.Name  `xml:"GetExternalIPAddressResponse"`
+  ExternalIPAddress string `xml:"NewExternalIPAddress"`
+}
+
+func GetExternalAddr(svc ssdpreg.SSDPService) (ip gnet.IP, err error) {
+  wurl, err := getWANIPControlURL(svc)
+
+  s := `<u:GetExternalIPAddress xmlns:u="urn:schemas-upnp-org:service:WANIPConnection:1"/>`
+
+  res, err := soapRequest(wurl.String(), "GetExternalIPAddress", s)
+  if err != nil {
+    return
+  }
+  defer res.Body.Close()
+
+  var reply xSoapEnvelope
+  err = xml.NewDecoder(res.Body).Decode(&reply)
+  if err != nil {
+    return
+  }
+
+  var reply2 xGetExternalAddrResponse
+  err = xml.Unmarshal(reply.Body.Data, &reply2)
+  if err != nil {
+    return
+  }
+
+  ip = gnet.ParseIP(reply2.ExternalIPAddress)
+  if ip == nil {
+    err = fmt.Errorf("Unable to parse IP address")
+    return
+  }
 
   return
 }
