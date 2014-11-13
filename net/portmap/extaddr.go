@@ -1,4 +1,5 @@
 package portmap
+
 import "github.com/hlandau/degoutils/net"
 import gnet "net"
 
@@ -11,17 +12,17 @@ import gnet "net"
 // be an RFC1918 address, due to the possibility of a double NAT setup. There
 // are better solutions for obtaining one's public IP address, such as STUN.
 func GetExternalAddr() (extaddr gnet.IP, err error) {
-  gwa, err := net.GetGatewayAddrs()
-  if err != nil {
-    return
-  }
+	gwa, err := net.GetGatewayAddrs()
+	if err != nil {
+		return
+	}
 
-  for _, gw := range gwa {
-    extaddr, err = natpmpGetExternalAddr(gw)
-    if err == nil {
-      return
-    }
-  }
+	for _, gw := range gwa {
+		extaddr, err = natpmpGetExternalAddr(gw)
+		if err == nil {
+			return
+		}
+	}
 
-  return
+	return
 }

@@ -1,4 +1,5 @@
 package net
+
 import gnet "net"
 
 // Get the addresses of default gateways for this host.
@@ -6,5 +7,5 @@ import gnet "net"
 // more than one default gateway. IPv4 default gateways are returned in
 // IPv6-mapped format.
 func GetGatewayAddrs() ([]gnet.IP, error) {
-  return getGatewayAddrs()
+	return getGatewayAddrs()
 }

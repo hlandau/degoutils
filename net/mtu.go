@@ -6,19 +6,19 @@ import "net"
 const absMaxDatagramSize = 2147483646 // 2**31-2
 
 func getMaxDatagramSize() int {
-  var m int = 65535
-  ifs, err := net.Interfaces()
-  if err != nil {
-    for i := range ifs {
-      if ifs[i].MTU > m {
-        m = ifs[i].MTU
-      }
-    }
-  }
-  if m > absMaxDatagramSize {
-    m = absMaxDatagramSize
-  }
-  return m
+	var m int = 65535
+	ifs, err := net.Interfaces()
+	if err != nil {
+		for i := range ifs {
+			if ifs[i].MTU > m {
+				m = ifs[i].MTU
+			}
+		}
+	}
+	if m > absMaxDatagramSize {
+		m = absMaxDatagramSize
+	}
+	return m
 }
 
 var maxDatagramSize int = getMaxDatagramSize()
@@ -51,15 +51,15 @@ var maxDatagramSize int = getMaxDatagramSize()
 //
 // This function returns the determined maximum receive size.
 func MaxDatagramSize() int {
-  return maxDatagramSize
+	return maxDatagramSize
 }
 
 // Updates the determined maximum receive size. Necessary if the maximum MTU of
 // all the interfaces configured on the system changes, and that value exceeds
 // 2**16-1.
 func UpdateMaxDatagramSize() int {
-  maxDatagramSize = getMaxDatagramSize()
-  return maxDatagramSize
+	maxDatagramSize = getMaxDatagramSize()
+	return maxDatagramSize
 }
 
 var WasTruncated error = errors.New("datagram was truncated")
@@ -70,31 +70,31 @@ var WasTruncated error = errors.New("datagram was truncated")
 // Returns error WasTruncated and an empty slice if the incoming packet may
 // have been truncated.
 func ReadDatagram(c net.Conn) (buf []byte, err error) {
-  bufx := make([]byte, maxDatagramSize+1)
-  n, err := c.Read(bufx)
-  if n > maxDatagramSize {
-    err = WasTruncated
-    return
-  }
+	bufx := make([]byte, maxDatagramSize+1)
+	n, err := c.Read(bufx)
+	if n > maxDatagramSize {
+		err = WasTruncated
+		return
+	}
 
-  if n > 0 {
-    buf = bufx[0:n]
-  }
+	if n > 0 {
+		buf = bufx[0:n]
+	}
 
-  return
+	return
 }
 
 func ReadDatagramFromUDP(c *net.UDPConn) (buf []byte, addr *net.UDPAddr, err error) {
-  bufx := make([]byte, maxDatagramSize+1)
-  n, addr, err := c.ReadFromUDP(bufx)
-  if n > maxDatagramSize {
-    err = WasTruncated
-    return
-  }
+	bufx := make([]byte, maxDatagramSize+1)
+	n, addr, err := c.ReadFromUDP(bufx)
+	if n > maxDatagramSize {
+		err = WasTruncated
+		return
+	}
 
-  if n > 0 {
-    buf = bufx[0:n]
-  }
+	if n > 0 {
+		buf = bufx[0:n]
+	}
 
-  return
+	return
 }
