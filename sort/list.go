@@ -18,7 +18,7 @@ func SortList(List *list.List, f SortLtFunc) {
     return
   }
 
-  A = List.Head()
+  A = List.Front()
   //Z = List.Back()   (not needed)
 
   // STABLE
@@ -58,7 +58,7 @@ func SortList(List *list.List, f SortLtFunc) {
       // or the R-list is non-empty (Rsz > 0 and R points to something
       // non-NULL), we have things to merge in our biparted list subsection.
       //
-      for Lsz > 0 || (Rsz > 0 && R) {
+      for Lsz > 0 || (Rsz > 0 && R != nil) {
         // Choose which list to take the next element from.
         // If either list is empty, we must choose from the other one.
         //
@@ -123,7 +123,7 @@ func SortList(List *list.List, f SortLtFunc) {
     //Z = T     (not needed)
     sz = sz*2
 
-    if num_merges <= 1 {
+    if numMerges <= 1 {
       break
     }
   }
