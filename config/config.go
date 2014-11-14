@@ -9,6 +9,7 @@ import "unsafe"
 import "github.com/BurntSushi/toml"
 import "io/ioutil"
 import "os"
+import "path/filepath"
 
 type Config struct {
 	Bind       string
@@ -23,9 +24,17 @@ type Configurator struct {
 	ConfigFilePaths []string
 	//Interspersed bool
 
+	configFilePath string // path of the config file that was actually used, or ""
+
 	rargs  []string
 	target interface{}
 	done   bool
+}
+
+// Returns the path to the config file which was actually used, or "" if no
+// config file was used.
+func (cc *Configurator) ConfigFilePath() string {
+	return cc.configFilePath
 }
 
 /*func (cc *Configurator) parseArgs(f func(optName, optValue string, noValue, isShort bool) error) error {
@@ -99,9 +108,26 @@ type Configurator struct {
 }*/
 
 var configFile string
+var exePath string
 
 func init() {
 	flag.StringVar(&configFile, "config", "", "path to configuration file")
+
+	// We have to determine the absolute path of the executable before the CWD
+	// (to which os.Args[0] is potentially relative) is changed, so we do it now.
+	var err error
+	exePath, err = filepath.Abs(os.Args[0])
+	if err != nil {
+		panic("cannot determine absolute path of executable filename")
+	}
+}
+
+func resolvePath(p string) string {
+	if !strings.HasPrefix(p, "$BIN/") {
+		return p
+	}
+
+	return filepath.Join(filepath.Dir(exePath), p[5:])
 }
 
 func (cc *Configurator) ParseFatal(target interface{}) {
@@ -131,6 +157,9 @@ func (cc *Configurator) parseFatal(target interface{}, noVars bool) {
 		name := strings.ToLower(f.Name)
 		usage := f.Tag.Get("usage")
 		dflt := f.Tag.Get("default")
+		if usage == "" && dflt == "" {
+			continue
+		}
 		vf := v.FieldByIndex(f.Index)
 		switch f.Type.Kind() {
 		case reflect.Int:
@@ -169,15 +198,23 @@ func (cc *Configurator) parseFatal(target interface{}, noVars bool) {
 	if configFile != "" {
 		cfiles = append(cfiles, configFile)
 	}
-	cfiles = append(cfiles, cc.ConfigFilePaths...)
+	for _, cf := range cc.ConfigFilePaths {
+		cf = resolvePath(cf)
+		cfiles = append(cfiles, cf)
+	}
 
 	if len(cfiles) > 0 {
 		for _, cfn := range cfiles {
 			fbuf, err := ioutil.ReadFile(cfn)
 			if err != nil {
+				if cfn == configFile {
+					// print error if config file was specified on command line
+					fmt.Printf("Error: cannot read config file \"%s\": %v", cfn, err)
+				}
 				continue
 			}
 
+			cc.configFilePath = cfn
 			fdata := string(fbuf)
 
 			_, err = toml.Decode(fdata, target)
@@ -185,6 +222,9 @@ func (cc *Configurator) parseFatal(target interface{}, noVars bool) {
 				fmt.Printf("Cannot decode configuration file: %s", err)
 				os.Exit(1)
 			}
+
+			// read only one configuration file
+			break
 		}
 	}
 

@@ -12,6 +12,10 @@ func systemdUpdateStatus(status string) error {
 	return fmt.Errorf("not supported")
 }
 
+func setproctitle(status string) error {
+	return nil
+}
+
 var serviceFlag = flag.String("service", "", "service command (one of: start, stop, install, remove)")
 
 type handler struct {

@@ -2,6 +2,7 @@ package service
 import "github.com/hlandau/degoutils/passwd"
 import "github.com/hlandau/degoutils/daemon"
 import sddaemon "github.com/coreos/go-systemd/daemon"
+import "github.com/ErikDubbelboer/gspt"
 import "flag"
 import "fmt"
 
@@ -11,6 +12,11 @@ var daemonizeFlag = flag.Bool("daemon", false, "Run as daemon? (doesn't fork)")
 
 func systemdUpdateStatus(status string) error {
 	return sddaemon.SdNotify(status)
+}
+
+func setproctitle(status string) error {
+	gspt.SetProcTitle(status)
+	return nil
 }
 
 func (info *Info) serviceMain() error {
@@ -61,20 +67,3 @@ func (info *Info) serviceMain() error {
 
 	return info.runInteractively()
 }
-
-/*
-[Unit]
-Description=Namecoin to DNS service
-
-[Service]
-Type=notify
-User=root
-Group=root
-WorkingDirectory=/
-ExecStart=
-
-[Install]
-WantedBy=multi-user.target
-
-
-*/

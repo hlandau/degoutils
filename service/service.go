@@ -106,6 +106,11 @@ func (h *ihandler) updateStatus() {
 		systemdUpdateStatus(s)
 		// ignore error
 	}
+
+	if h.status != "" {
+		setproctitle(h.status)
+		// ignore error
+	}
 }
 
 func (info *Info) runInteractively() error {
@@ -146,30 +151,3 @@ loop:
 
 	return nil
 }
-
-/*`
-func main() {
-	Info{
-		Title: "Foobar Web Server",
-		Name: "foobar",
-		Description: "Foobar Web Server",
-		RunFunc: run,
-	}.Main()
-}
-
-func run(smgr ServiceManager) error {
-	smgr.SetStarted()
-
-loop:
-	for {
-		select {
-			case ...:
-				// ...
-			case <-smgr.StopChan():
-				break loop
-		}
-	}
-
-	return nil
-}
-`*/
