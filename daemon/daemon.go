@@ -74,6 +74,10 @@ func Daemonize() error {
 	return nil
 }
 
+func IsRoot() bool {
+	return syscall.Getuid() == 0 || syscall.Geteuid() == 0 || syscall.Getgid() == 0 || syscall.Getegid() == 0
+}
+
 // Drops privileges to the specified UID and GID.
 // This function does nothing and returns no error if all E?[UG]IDs are nonzero.
 //
@@ -86,7 +90,7 @@ func Daemonize() error {
 // The function ensures that /etc/hosts and /etc/resolv.conf are loaded before
 // chrooting, so name service should continue to be available.
 func DropPrivileges(UID, GID int) error {
-	if syscall.Getuid() != 0 && syscall.Geteuid() != 0 && syscall.Getgid() != 0 && syscall.Getegid() != 0 {
+	if !IsRoot() {
 		return nil
 	}
 
