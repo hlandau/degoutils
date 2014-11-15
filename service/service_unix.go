@@ -11,6 +11,7 @@ var uidFlag = flag.String("uid", "", "UID to run as (default: don't drop privile
 var gidFlag = flag.String("gid", "", "GID to run as (default: don't drop privileges)")
 var daemonizeFlag = flag.Bool("daemon", false, "Run as daemon? (doesn't fork)")
 var chrootFlag = flag.String("chroot", "", "Chroot to a directory (must set UID, GID) (\"/\" disables)")
+var pidfileFlag = flag.String("pidfile", "", "Write PID to file with given filename and hold a write lock")
 
 func systemdUpdateStatus(status string) error {
 	return sdnotify.SdNotify(status)
@@ -36,7 +37,26 @@ func (info *Info) serviceMain() error {
 		info.systemd = true
 	}
 
+	if *pidfileFlag != "" {
+		info.pidFileName = *pidfileFlag
+
+		err = info.openPIDFile()
+		if err != nil {
+			return err
+		}
+
+		defer info.closePIDFile()
+	}
+
 	return info.runInteractively()
+}
+
+func (info *Info) openPIDFile() error {
+	return daemon.OpenPIDFile(info.pidFileName)
+}
+
+func (info *Info) closePIDFile() {
+	daemon.ClosePIDFile()
 }
 
 func (h *ihandler) DropPrivileges() error {
@@ -66,6 +86,11 @@ func (h *ihandler) DropPrivileges() error {
 	chrootPath := *chrootFlag
 	if chrootPath == "" {
 		chrootPath = h.info.DefaultChroot
+	}
+
+	err := h.dropPrivilegesExtra()
+	if err != nil {
+		return err
 	}
 
 	if *uidFlag != "" {

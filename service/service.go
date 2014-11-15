@@ -47,10 +47,14 @@ type Info struct {
 
 	AllowRoot bool        // May the service run as root? If false, the service will refuse to run as root.
 	DefaultChroot string  // Default path to chroot to. Use this if the service can be chrooted without consequence.
+	NoBanSuid bool        // Set to true if the ability to execute suid binaries must be retained.
 
 	// Are we being started by systemd with [Service] Type=notify?
 	// If so, we can issue service status notifications to systemd.
 	systemd bool
+
+	// Path to created PID file.
+	pidFileName string
 }
 
 var EmptyChrootPath = daemon.EmptyChrootPath

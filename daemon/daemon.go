@@ -6,6 +6,7 @@ import "net"
 import "os"
 import "errors"
 import "github.com/hlandau/degoutils/passwd"
+import "fmt"
 
 // Initialises a daemon with recommended values.
 //
@@ -27,40 +28,35 @@ func Init() error {
 // If you intend to call DropPrivileges, call it after calling this function,
 // as /dev/null will no longer be available after privileges are dropped.
 func Daemonize() error {
-	//   null_fd = open("/dev/null", O_WRONLY);
 	null_f, err := os.OpenFile("/dev/null", os.O_RDWR, 0)
 	if err != nil {
 		return err
 	}
 
-	//   close(0);
 	stdin_fd := int(os.Stdin.Fd())
 	stdout_fd := int(os.Stdout.Fd())
 	stderr_fd := int(os.Stderr.Fd())
-	err = syscall.Close(stdin_fd)
-	if err != nil {
-		return err
-	}
 
-	err = syscall.Close(stdout_fd)
-	if err != nil {
-		return err
-	}
-
-	err = syscall.Close(stderr_fd)
-	if err != nil {
-		return err
-	}
-
-	//   close(1);
-	//   close(2);
-	//   ... reopen fds 0, 1, 2 as /dev/null ...
+	// ... reopen fds 0, 1, 2 as /dev/null ...
+	// Since dup2 closes fds which are already open we needn't close the above fds.
+	// This lets us avoid race conditions.
 	null_fd := int(null_f.Fd())
-	syscall.Dup2(null_fd, stdin_fd)
-	syscall.Dup2(null_fd, stdout_fd)
-	syscall.Dup2(null_fd, stderr_fd)
+	err = syscall.Dup2(null_fd, stdin_fd)
+	if err != nil {
+		return err
+	}
 
-	err = syscall.Close(null_fd)
+	err = syscall.Dup2(null_fd, stdout_fd)
+	if err != nil {
+		return err
+	}
+
+	err = syscall.Dup2(null_fd, stderr_fd)
+	if err != nil {
+		return err
+	}
+
+	err = null_f.Close()
 	if err != nil {
 		return err
 	}
@@ -156,6 +152,107 @@ func DropPrivileges(UID, GID int, chrootDir string) error {
 	}
 
 	return nil
+}
+
+var pidFile *os.File
+var pidFileName string
+
+// Opens a PID file. The PID of the current process is written to the file
+// and the file is locked. The file is kept open until the process terminates.
+// Only one PID file must be called at a time, so this function must not be
+// called again unless ClosePIDFile() has been called.
+func OpenPIDFile(filename string) error {
+	if pidFile != nil {
+		return fmt.Errorf("PID file already opened")
+	}
+
+	f, err := openPIDFile(filename)
+	if err != nil {
+		return err
+	}
+
+	s := fmt.Sprintf("%d\n", os.Getpid())
+	_, err = f.WriteString(s)
+	if err != nil {
+		f.Close()
+		return err
+	}
+
+	pidFile = f
+	pidFileName = filename
+
+	return nil
+}
+
+// Closes any previously opened PID file.
+func ClosePIDFile() {
+	if pidFile != nil {
+		// try and remove file, don't care if it fails
+		os.Remove(pidFileName)
+
+		pidFile.Close()
+		pidFile = nil
+		pidFileName = ""
+	}
+}
+
+func openPIDFile(filename string) (*os.File, error) {
+	var f *os.File
+	var err error
+
+	for {
+		f, err = os.OpenFile(filename,
+			syscall.O_RDWR | syscall.O_CREAT | syscall.O_EXCL, 420 /* 0644 */)
+		if err != nil {
+			if !os.IsExist(err) {
+				return nil, err
+			}
+
+			f, err = os.OpenFile(filename, syscall.O_RDWR, 420 /* 0644 */)
+			if err != nil {
+				if os.IsNotExist(err) {
+					continue
+				}
+				return nil, err
+			}
+		}
+
+		err = syscall.FcntlFlock(f.Fd(), syscall.F_SETLK, &syscall.Flock_t{
+			Type: syscall.F_WRLCK,
+		})
+		if err != nil {
+			f.Close()
+			return nil, err
+		}
+
+		st1 := syscall.Stat_t{}
+		err = syscall.Fstat(int(f.Fd()), &st1) // ffs
+		if err != nil {
+			f.Close()
+			return nil, err
+		}
+
+		st2 := syscall.Stat_t{}
+		err = syscall.Stat(filename, &st2)
+		if err != nil {
+			f.Close()
+
+			if os.IsNotExist(err) {
+				continue
+			}
+
+			return nil, err
+		}
+
+		if st1.Ino != st2.Ino {
+			f.Close()
+			continue
+		}
+
+		break
+	}
+
+	return f, nil
 }
 
 var EmptyChrootPath = "/var/empty"
