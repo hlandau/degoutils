@@ -27,7 +27,7 @@ type Backoff struct {
 	CurrentTry int
 }
 
-// Initialises any nil field in RetryConfig with sensible defaults. You
+// Initialises any nil field in Backoff with sensible defaults. You
 // normally do not need to call this method yourself, as it will be called
 // automatically.
 func (rc *Backoff) InitDefaults() {

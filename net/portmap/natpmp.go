@@ -12,7 +12,7 @@ import "encoding/binary"
 const opcGetExternalAddr = 0
 const natpmpHostToRouterPort = 5351
 
-var natpmpRetryConfig = net.Backoff{
+var natpmpBackoff = net.Backoff{
 	MaxTries:           9,
 	InitialDelay:       250,
 	MaxDelay:           64000, // InitialDelay*8
@@ -34,7 +34,7 @@ func natpmpMakeRequest(dst gnet.IP, opcode byte, data []byte) (r []byte, err err
 	msg[1] = opcode // Opcode
 	msg = append(msg, data...)
 
-	rconf := natpmpRetryConfig
+	rconf := natpmpBackoff
 	rconf.Reset()
 
 	for {

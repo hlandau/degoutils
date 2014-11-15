@@ -204,7 +204,7 @@ type ZMQConfigurator func(sock *zmq.Socket) error
 type ConnectConfig struct {
 	// Controls how many times connection will be attempted, and the delay
 	// between each attempt.
-	RetryConfig net.Backoff
+	Backoff net.Backoff
 
 	// The Connection Method Description String.
 	MethodDescriptor string
@@ -300,7 +300,7 @@ func (self *connector) asyncNotifyInterim(t int, progressInfo string) {
 	var ev ConnectionEvent = ConnectionEvent{
 		Type:             t,
 		ProgressInfo:     progressInfo,
-		ServiceAttemptNo: self.cc.RetryConfig.CurrentTry,
+		ServiceAttemptNo: self.cc.Backoff.CurrentTry,
 	}
 	log.Info(fmt.Sprintf("async connect: interim: %+v", ev))
 	self.ch <- ev
@@ -348,7 +348,7 @@ func (self *connector) asyncConnectMethodPort(m cmdsMethod, hostname string, por
 		panic("unreachable")
 	}
 
-	self.cc.RetryConfig.Reset()
+	self.cc.Backoff.Reset()
 	self.asyncNotifyConnected(conn)
 	return nil
 }
@@ -479,7 +479,7 @@ func (self *connector) asyncConnectAttempt() error {
 
 func (self *connector) asyncConnect() {
 	for {
-		d := self.cc.RetryConfig.GetStepDelay()
+		d := self.cc.Backoff.GetStepDelay()
 		if d == 0 {
 			break
 		}

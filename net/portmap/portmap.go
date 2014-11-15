@@ -60,7 +60,7 @@ type MappingConfig struct {
 	//
 	// It is recommended that you use the nil value for this struct, which will
 	// cause sensible defaults to be used with no limit on retries.
-	RetryConfig net.Backoff
+	Backoff net.Backoff
 }
 
 // A mapping has a state:
@@ -433,7 +433,7 @@ func (self *mapping) portMappingLoop(gwa []gnet.IP) {
 		if ok {
 			log.Info("fwneg succeeded")
 			self.notify()
-			self.config.RetryConfig.Reset()
+			self.config.Backoff.Reset()
 			select {
 			case <-self.abortChan:
 				aborting = true
@@ -442,7 +442,7 @@ func (self *mapping) portMappingLoop(gwa []gnet.IP) {
 			}
 		} else {
 			// failed, do retry delay
-			d := self.config.RetryConfig.GetStepDelay()
+			d := self.config.Backoff.GetStepDelay()
 			if d == 0 {
 				// max tries occurred
 				if aborting {
