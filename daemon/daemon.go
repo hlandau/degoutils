@@ -5,12 +5,15 @@ import "syscall"
 import "net"
 import "os"
 import "errors"
+import "github.com/hlandau/degoutils/passwd"
 
 // Initialises a daemon with recommended values.
 //
 // Currently, this only calls umask(0).
 func Init() error {
 	syscall.Umask(0)
+
+	// setrlimit RLIMIT_CORE
 	return nil
 }
 
@@ -102,6 +105,11 @@ func DropPrivileges(UID, GID int, chrootDir string) error {
 		return errors.New("Can't drop privileges to GID 0 - did you set the GID properly?")
 	}
 
+	gids, err := passwd.GetExtraGIDs(GID)
+	if err != nil {
+		return err
+	}
+
 	if chrootDir == "/" {
 		chrootDir = ""
 	}
@@ -120,12 +128,14 @@ func DropPrivileges(UID, GID int, chrootDir string) error {
 		}
 	}
 
-	err := syscall.Chdir("/")
+	err = syscall.Chdir("/")
 	if err != nil {
 		return err
 	}
 
-	err = syscall.Setgroups([]int{GID})
+	gids = append(gids, GID)
+
+	err = syscall.Setgroups(gids)
 	if err != nil {
 		return err
 	}

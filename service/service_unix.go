@@ -5,6 +5,7 @@ import "github.com/hlandau/degoutils/service/sdnotify"
 import "github.com/ErikDubbelboer/gspt"
 import "flag"
 import "fmt"
+import "strconv"
 
 var uidFlag = flag.String("uid", "", "UID to run as (default: don't drop privileges)")
 var gidFlag = flag.String("gid", "", "GID to run as (default: don't drop privileges)")
@@ -51,7 +52,11 @@ func (h *ihandler) DropPrivileges() error {
 	}
 
 	if *uidFlag != "" && *gidFlag == "" {
-		*gidFlag = *uidFlag
+		gid, err := passwd.GetGIDForUID(*uidFlag)
+		if err != nil {
+			return err
+		}
+		*gidFlag = strconv.FormatInt(int64(gid), 10)
 	}
 
 	if h.info.DefaultChroot == "" {
