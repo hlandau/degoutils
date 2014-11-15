@@ -11,7 +11,7 @@ import gnet "net"
 // This function is not very useful because the IP address returned may still
 // be an RFC1918 address, due to the possibility of a double NAT setup. There
 // are better solutions for obtaining one's public IP address, such as STUN.
-func GetExternalAddr() (extaddr gnet.IP, err error) {
+func ExternalAddr() (extaddr gnet.IP, err error) {
 	gwa, err := net.GetGatewayAddrs()
 	if err != nil {
 		return

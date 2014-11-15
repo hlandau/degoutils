@@ -19,13 +19,13 @@ import "github.com/hlandau/degoutils/log"
 import "github.com/hlandau/degoutils/net/ssdpreg"
 import "github.com/hlandau/degoutils/net/portmap/upnp"
 
-const ProtocolTCP = natpmpTCP
-const ProtocolUDP = natpmpUDP
+const ProtocolTCP = natpmpTCP  // Map a TCP port.
+const ProtocolUDP = natpmpUDP  // Map a UDP port.
 
-type MappingConfig struct {
+type Config struct {
 	// The protocol for which the port should be mapped.
 	//
-	// Must be Protocol_TCP or Protocol_UDP.
+	// Must be ProtocolTCP or ProtocolUDP.
 	Protocol int
 
 	// A short description for the mapping. This may not be used in all cases.
@@ -116,7 +116,7 @@ type mapping struct {
 
 	// m: Protected by mutex
 
-	config MappingConfig // m(ExternalPort)
+	config Config // m(ExternalPort)
 
 	failed     bool      // m
 	expireTime time.Time // m
@@ -477,7 +477,7 @@ func (self *mapping) portMappingLoop(gwa []gnet.IP) {
 // A successful mapping is by no means guaranteed.
 //
 // See the MappingConfig struct and the Mapping interface for more information.
-func CreatePortMapping(config MappingConfig) (m Mapping, err error) {
+func New(config Config) (m Mapping, err error) {
 	gwa, err := net.GetGatewayAddrs()
 	if err != nil {
 		return
