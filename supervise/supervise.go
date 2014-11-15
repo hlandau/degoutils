@@ -92,7 +92,7 @@ func Supervise(f func() error) Supervisor {
 			select {
 			case e := <-ch:
 				if e.Type != MET_NormalExit || e.ReturnError != nil {
-					delay := time.Duration(sup.retryConfig.GetStepDelay()) * time.Millisecond
+					delay := time.Duration(sup.retryConfig.NextDelay()) * time.Millisecond
 					log.Info(fmt.Sprintf("supervised goroutine exited, restarting in %+v: %+v", delay, e))
 					time.Sleep(delay)
 					ch = Monitor(f)

@@ -19,8 +19,8 @@ import "github.com/hlandau/degoutils/log"
 import "github.com/hlandau/degoutils/net/ssdpreg"
 import "github.com/hlandau/degoutils/net/portmap/upnp"
 
-const ProtocolTCP = natpmpTCP  // Map a TCP port.
-const ProtocolUDP = natpmpUDP  // Map a UDP port.
+const ProtocolTCP = natpmpTCP // Map a TCP port.
+const ProtocolUDP = natpmpUDP // Map a UDP port.
 
 type Config struct {
 	// The protocol for which the port should be mapped.
@@ -442,7 +442,7 @@ func (self *mapping) portMappingLoop(gwa []gnet.IP) {
 			}
 		} else {
 			// failed, do retry delay
-			d := self.config.Backoff.GetStepDelay()
+			d := self.config.Backoff.NextDelay()
 			if d == 0 {
 				// max tries occurred
 				if aborting {

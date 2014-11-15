@@ -39,7 +39,7 @@ func natpmpMakeRequest(dst gnet.IP, opcode byte, data []byte) (r []byte, err err
 
 	for {
 		// here we use the 'delay' as the timeout
-		maxtime := rconf.GetStepDelay()
+		maxtime := rconf.NextDelay()
 		if maxtime == 0 {
 			// max tries reached
 			break

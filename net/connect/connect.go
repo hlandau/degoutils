@@ -479,7 +479,7 @@ func (self *connector) asyncConnectAttempt() error {
 
 func (self *connector) asyncConnect() {
 	for {
-		d := self.cc.Backoff.GetStepDelay()
+		d := self.cc.Backoff.NextDelay()
 		if d == 0 {
 			break
 		}
