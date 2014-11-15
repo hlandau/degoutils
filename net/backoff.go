@@ -6,7 +6,7 @@ import "time"
 // Expresses a backoff and retry specification.
 //
 // The nil value of this structure results in sensible defaults being used.
-type RetryConfig struct {
+type Backoff struct {
 	// The maximum number of attempts which may be made.
 	// If this is 0, the number of attempts is unlimited.
 	MaxTries int
@@ -30,7 +30,7 @@ type RetryConfig struct {
 // Initialises any nil field in RetryConfig with sensible defaults. You
 // normally do not need to call this method yourself, as it will be called
 // automatically.
-func (rc *RetryConfig) InitDefaults() {
+func (rc *Backoff) InitDefaults() {
 	if rc.InitialDelay == 0 {
 		rc.InitialDelay = 5000
 	}
@@ -43,7 +43,7 @@ func (rc *RetryConfig) InitDefaults() {
 }
 
 // Gets the next delay in milliseconds and increments the internal try counter.
-func (rc *RetryConfig) GetStepDelay() time.Duration {
+func (rc *Backoff) GetStepDelay() time.Duration {
 	rc.InitDefaults()
 
 	if rc.MaxTries != 0 && rc.CurrentTry >= rc.MaxTries {
@@ -63,12 +63,12 @@ func (rc *RetryConfig) GetStepDelay() time.Duration {
 }
 
 // Sleep for the duration returned by GetStepDelay().
-func (rc *RetryConfig) Sleep() {
+func (rc *Backoff) Sleep() {
 	time.Sleep(rc.GetStepDelay())
 }
 
 // Sets the internal try counter to zero; the next delay returned will be
 // InitialDelay again.
-func (rc *RetryConfig) Reset() {
+func (rc *Backoff) Reset() {
 	rc.CurrentTry = 0
 }

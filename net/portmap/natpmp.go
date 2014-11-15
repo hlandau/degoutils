@@ -12,7 +12,7 @@ import "encoding/binary"
 const opcGetExternalAddr = 0
 const natpmpHostToRouterPort = 5351
 
-var natpmpRetryConfig = net.RetryConfig{
+var natpmpRetryConfig = net.Backoff{
 	MaxTries:           9,
 	InitialDelay:       250,
 	MaxDelay:           64000, // InitialDelay*8

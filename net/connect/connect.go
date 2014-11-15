@@ -204,7 +204,7 @@ type ZMQConfigurator func(sock *zmq.Socket) error
 type ConnectConfig struct {
 	// Controls how many times connection will be attempted, and the delay
 	// between each attempt.
-	RetryConfig net.RetryConfig
+	RetryConfig net.Backoff
 
 	// The Connection Method Description String.
 	MethodDescriptor string

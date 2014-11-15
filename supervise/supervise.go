@@ -69,7 +69,7 @@ type SupervisionCommand struct {
 type supervisor struct {
 	cch         chan SupervisionCommand
 	evch        chan SupervisionEvent
-	retryConfig net.RetryConfig
+	retryConfig net.Backoff
 }
 
 func (s *supervisor) Stop() {

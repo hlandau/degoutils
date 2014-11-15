@@ -60,7 +60,7 @@ type MappingConfig struct {
 	//
 	// It is recommended that you use the nil value for this struct, which will
 	// cause sensible defaults to be used with no limit on retries.
-	RetryConfig net.RetryConfig
+	RetryConfig net.Backoff
 }
 
 // A mapping has a state:
