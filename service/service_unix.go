@@ -1,7 +1,7 @@
 package service
 import "github.com/hlandau/degoutils/passwd"
 import "github.com/hlandau/degoutils/daemon"
-import sddaemon "github.com/coreos/go-systemd/daemon"
+import "github.com/hlandau/degoutils/service/sdnotify"
 import "github.com/ErikDubbelboer/gspt"
 import "flag"
 import "fmt"
@@ -9,9 +9,10 @@ import "fmt"
 var uidFlag = flag.String("uid", "", "UID to run as (default: don't drop privileges)")
 var gidFlag = flag.String("gid", "", "GID to run as (default: don't drop privileges)")
 var daemonizeFlag = flag.Bool("daemon", false, "Run as daemon? (doesn't fork)")
+var chrootFlag = flag.String("chroot", "", "Chroot to a directory (must set UID, GID) (\"/\" disables)")
 
 func systemdUpdateStatus(status string) error {
-	return sddaemon.SdNotify(status)
+	return sdnotify.SdNotify(status)
 }
 
 func setproctitle(status string) error {
@@ -34,15 +35,32 @@ func (info *Info) serviceMain() error {
 		info.systemd = true
 	}
 
-	if *daemonizeFlag {
+	return info.runInteractively()
+}
+
+func (h *ihandler) DropPrivileges() error {
+	if h.dropped {
+		return nil
+	}
+
+	if *daemonizeFlag || h.info.systemd {
 		err := daemon.Daemonize()
 		if err != nil {
 			return err
 		}
 	}
 
-	if (*uidFlag == "") != (*gidFlag == "") {
-		return fmt.Errorf("Both a UID and GID must be specified, or neither")
+	if *uidFlag != "" && *gidFlag == "" {
+		*gidFlag = *uidFlag
+	}
+
+	if h.info.DefaultChroot == "" {
+		h.info.DefaultChroot = "/"
+	}
+
+	chrootPath := *chrootFlag
+	if chrootPath == "" {
+		chrootPath = h.info.DefaultChroot
 	}
 
 	if *uidFlag != "" {
@@ -55,15 +73,18 @@ func (info *Info) serviceMain() error {
 			return err
 		}
 
-		err = daemon.DropPrivileges(uid, gid)
+		err = daemon.DropPrivileges(uid, gid, chrootPath)
 		if err != nil {
 			return err
 		}
+	} else if *chrootFlag != "" && *chrootFlag != "/" {
+		return fmt.Errorf("Must set UID and GID to use chroot")
 	}
 
-	if !info.AllowRoot && daemon.IsRoot() {
+	if !h.info.AllowRoot && daemon.IsRoot() {
 		return fmt.Errorf("Daemon must not run as root")
 	}
 
-	return info.runInteractively()
+	h.dropped = true
+	return nil
 }

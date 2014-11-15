@@ -81,15 +81,15 @@ func IsRoot() bool {
 // Drops privileges to the specified UID and GID.
 // This function does nothing and returns no error if all E?[UG]IDs are nonzero.
 //
-// The process is chrooted into /var/empty, which must exist. The function
-// tests that privilege dropping has been successful by attempting to
-// setuid(0), which must fail.
+// If chrootDir is not empty, the process is chrooted into it. The directory
+// must exist. The function tests that privilege dropping has been successful
+// by attempting to setuid(0), which must fail.
 //
 // The current directory is set to / inside the chroot.
 //
 // The function ensures that /etc/hosts and /etc/resolv.conf are loaded before
 // chrooting, so name service should continue to be available.
-func DropPrivileges(UID, GID int) error {
+func DropPrivileges(UID, GID int, chrootDir string) error {
 	if !IsRoot() {
 		return nil
 	}
@@ -102,16 +102,25 @@ func DropPrivileges(UID, GID int) error {
 		return errors.New("Can't drop privileges to GID 0 - did you set the GID properly?")
 	}
 
-	c, err := net.Dial("udp", "un_localhost:1")
-	if err != nil {
-		//
-	} else {
-		c.Close()
+	if chrootDir == "/" {
+		chrootDir = ""
 	}
 
-	syscall.Chroot("/var/empty")
+	if chrootDir != "" {
+		c, err := net.Dial("udp", "un_localhost:1")
+		if err != nil {
+			//
+		} else {
+			c.Close()
+		}
 
-	err = syscall.Chdir("/")
+		err = syscall.Chroot(chrootDir)
+		if err != nil {
+			return err
+		}
+	}
+
+	err := syscall.Chdir("/")
 	if err != nil {
 		return err
 	}
@@ -138,3 +147,5 @@ func DropPrivileges(UID, GID int) error {
 
 	return nil
 }
+
+var EmptyChrootPath = "/var/empty"

@@ -6,6 +6,8 @@ import "sync"
 import "os"
 import "os/signal"
 import "syscall"
+import "github.com/hlandau/degoutils/daemon"
+import "fmt"
 
 // This function should typically be called directly from func main(). It takes
 // care of all housekeeping for running services and handles service lifecycle.
@@ -14,6 +16,10 @@ func Main(info *Info) {
 }
 
 type Manager interface {
+	// Must be called when the service is ready to drop privileges.
+	// This must be called before SetStarted().
+	DropPrivileges() error
+
 	// Must be called by a service payload when it has finished starting.
 	SetStarted()
 
@@ -39,12 +45,15 @@ type Info struct {
 	Title       string // Optional. Friendly name for the service, e.g. "Foobar Web Server"
 	Description string // Optional. Single line description for the service
 
-	AllowRoot bool     // May the service run as root? If false, the service will refuse to run as root.
+	AllowRoot bool        // May the service run as root? If false, the service will refuse to run as root.
+	DefaultChroot string  // Default path to chroot to. Use this if the service can be chrooted without consequence.
 
 	// Are we being started by systemd with [Service] Type=notify?
 	// If so, we can issue service status notifications to systemd.
 	systemd bool
 }
+
+var EmptyChrootPath = daemon.EmptyChrootPath
 
 func (info *Info) main() {
 	if info.Name == "" {
@@ -57,7 +66,11 @@ func (info *Info) main() {
 		info.Description = info.Title
 	}
 
-	info.serviceMain()
+	err := info.serviceMain()
+	if err != nil {
+		fmt.Printf("Error: %+v\n", err)
+		os.Exit(1)
+	}
 }
 
 type ihandler struct {
@@ -69,9 +82,14 @@ type ihandler struct {
 	status           string
 	started          bool
 	stopping         bool
+	dropped          bool
 }
 
 func (h *ihandler) SetStarted() {
+	if !h.dropped {
+		panic("service must call DropPrivileges before calling SetStarted")
+	}
+
 	select {
 	case h.startedChan <- struct{}{}:
 	default:
@@ -128,6 +146,8 @@ func (info *Info) runInteractively() error {
 	sig := make(chan os.Signal)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 
+	var exitErr error
+
 loop:
 	for {
 		select {
@@ -144,10 +164,10 @@ loop:
 			}
 		case <-smgr.statusNotifyChan:
 			smgr.updateStatus()
-		case <-doneChan:
+		case exitErr = <-doneChan:
 			break loop
 		}
 	}
 
-	return nil
+	return exitErr
 }

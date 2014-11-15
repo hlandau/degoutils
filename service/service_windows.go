@@ -25,7 +25,16 @@ type handler struct {
 	status string
 }
 
+func (h *handler) DropPrivileges() error {
+	h.dropped = true
+	return nil
+}
+
 func (h *handler) SetStarted() {
+	if !h.dropped {
+		panic("service must call DropPrivileges before calling SetStarted")
+	}
+
 	select {
 		case h.startedChan <- struct{}{}:
 		default:
