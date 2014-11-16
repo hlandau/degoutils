@@ -140,7 +140,20 @@ func (cc *Configurator) ParseFatal(target interface{}) {
 	cc.done = true
 }
 
+func (cc *Configurator) buildPaths() {
+	cc.ConfigFilePaths = []string{
+		fmt.Sprintf("$BIN/../etc/%s/%s.conf", cc.ProgramName),
+		fmt.Sprintf("$BIN/../etc/%s.conf", cc.ProgramName),
+		fmt.Sprintf("/etc/%s/%s.conf", cc.ProgramName),
+		fmt.Sprintf("/etc/%s.conf", cc.ProgramName),
+	}
+}
+
 func (cc *Configurator) parseFatal(target interface{}, noVars bool) {
+	if cc.ConfigFilePaths == nil {
+		cc.buildPaths()
+	}
+
 	t := reflect.TypeOf(target)
 	v := reflect.ValueOf(target)
 	if t.Kind() == reflect.Ptr {
