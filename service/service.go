@@ -14,6 +14,21 @@ import "runtime/pprof"
 import _ "net/http/pprof"
 import _ "expvar"
 
+// Flags
+
+var fs = flag.NewFlagSet("Service Options", flag.ContinueOnError)
+var debugServerAddrFlag = fs.String("debugserveraddr", "", "Address for debu server to listen on (do not specify a public address) (default: isabled)")
+var cpuProfileFlag = fs.String("cpuprofile", "", "Write CPU profile to file")
+
+func init() {
+	oldUsage := flag.Usage
+	flag.Usage = func() {
+		oldUsage()
+		fmt.Printf("\nService Options:\n")
+		fs.PrintDefaults()
+	}
+}
+
 // This function should typically be called directly from func main(). It takes
 // care of all housekeeping for running services and handles service lifecycle.
 func Main(info *Info) {
@@ -60,21 +75,6 @@ type Info struct {
 
 	// Path to created PID file.
 	pidFileName string
-
-	// Flags
-	fs                  *flag.FlagSet
-	debugServerAddrFlag *string
-	cpuProfileFlag      *string
-
-	// UNIX only
-	uidFlag       *string
-	gidFlag       *string
-	daemonizeFlag *bool
-	chrootFlag    *string
-	pidfileFlag   *string
-
-	// Windows only
-	serviceFlag *string
 }
 
 var EmptyChrootPath = daemon.EmptyChrootPath
@@ -98,25 +98,16 @@ func (info *Info) maine() error {
 		info.Description = info.Title
 	}
 
-	info.fs = flag.NewFlagSet("Service Options", flag.ContinueOnError)
-	info.debugServerAddrFlag = info.fs.String("debugserveraddr", "", "Address for debug server to listen on (do not specify a public address) (default: disabled)")
-	info.cpuProfileFlag = info.fs.String("cpuprofile", "", "Write CPU profile to file")
+	fs.Parse(os.Args[1:]) // ignore errors
 
-	err := info.registerFlags()
-	if err != nil {
-		panic(err)
-	}
-
-	info.fs.Parse(os.Args[1:]) // ignore errors
-
-	err = info.commonPre()
+	err := info.commonPre()
 	if err != nil {
 		return err
 	}
 
 	// profiling
-	if *info.cpuProfileFlag != "" {
-		f, err := os.Create(*info.cpuProfileFlag)
+	if *cpuProfileFlag != "" {
+		f, err := os.Create(*cpuProfileFlag)
 		if err != nil {
 			return err
 		}
@@ -131,9 +122,9 @@ func (info *Info) maine() error {
 }
 
 func (info *Info) commonPre() error {
-	if *info.debugServerAddrFlag != "" {
+	if *debugServerAddrFlag != "" {
 		go func() {
-			err := http.ListenAndServe(*info.debugServerAddrFlag, nil)
+			err := http.ListenAndServe(*debugServerAddrFlag, nil)
 			if err != nil {
 				fmt.Printf("Couldn't start debug server: %+v\n", err)
 			}

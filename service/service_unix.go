@@ -7,21 +7,18 @@ import "github.com/ErikDubbelboer/gspt"
 import "fmt"
 import "strconv"
 
+var uidFlag = fs.String("uid", "", "UID to run as (default: don't drop privileges)")
+var gidFlag = fs.String("gid", "", "GID to run as (default: don't drop privileges)")
+var daemonizeFlag = fs.Bool("daemon", false, "Run as daemon? (doesn't fork)")
+var chrootFlag = fs.String("chroot", "", "Chroot to a directory (must set UID, GID) (\"/\" disables)")
+var pidfileFlag = fs.String("pidfile", "", "Write PID to file with given filename and hold a write lock")
+
 func systemdUpdateStatus(status string) error {
 	return sdnotify.SdNotify(status)
 }
 
 func setproctitle(status string) error {
 	gspt.SetProcTitle(status)
-	return nil
-}
-
-func (info *Info) registerFlags() error {
-	info.uidFlag = info.fs.String("uid", "", "UID to run as (default: don't drop privileges)")
-	info.gidFlag = info.fs.String("gid", "", "GID to run as (default: don't drop privileges)")
-	info.daemonizeFlag = info.fs.Bool("daemon", false, "Run as daemon? (doesn't fork)")
-	info.chrootFlag = info.fs.String("chroot", "", "Chroot to a directory (must set UID, GID) (\"/\" disables)")
-	info.pidfileFlag = info.fs.String("pidfile", "", "Write PID to file with given filename and hold a write lock")
 	return nil
 }
 
@@ -36,8 +33,8 @@ func (info *Info) serviceMain() error {
 		info.systemd = true
 	}
 
-	if *info.pidfileFlag != "" {
-		info.pidFileName = *info.pidfileFlag
+	if *pidfileFlag != "" {
+		info.pidFileName = *pidfileFlag
 
 		err = info.openPIDFile()
 		if err != nil {
@@ -63,26 +60,26 @@ func (h *ihandler) DropPrivileges() error {
 		return nil
 	}
 
-	if *h.info.daemonizeFlag || h.info.systemd {
+	if *daemonizeFlag || h.info.systemd {
 		err := daemon.Daemonize()
 		if err != nil {
 			return err
 		}
 	}
 
-	if *h.info.uidFlag != "" && *h.info.gidFlag == "" {
-		gid, err := passwd.GetGIDForUID(*h.info.uidFlag)
+	if *uidFlag != "" && *gidFlag == "" {
+		gid, err := passwd.GetGIDForUID(*uidFlag)
 		if err != nil {
 			return err
 		}
-		*h.info.gidFlag = strconv.FormatInt(int64(gid), 10)
+		*gidFlag = strconv.FormatInt(int64(gid), 10)
 	}
 
 	if h.info.DefaultChroot == "" {
 		h.info.DefaultChroot = "/"
 	}
 
-	chrootPath := *h.info.chrootFlag
+	chrootPath := *chrootFlag
 	if chrootPath == "" {
 		chrootPath = h.info.DefaultChroot
 	}
@@ -92,12 +89,12 @@ func (h *ihandler) DropPrivileges() error {
 		return err
 	}
 
-	if *h.info.uidFlag != "" {
-		uid, err := passwd.ParseUID(*h.info.uidFlag)
+	if *uidFlag != "" {
+		uid, err := passwd.ParseUID(*uidFlag)
 		if err != nil {
 			return err
 		}
-		gid, err := passwd.ParseGID(*h.info.gidFlag)
+		gid, err := passwd.ParseGID(*gidFlag)
 		if err != nil {
 			return err
 		}
@@ -106,7 +103,7 @@ func (h *ihandler) DropPrivileges() error {
 		if err != nil {
 			return err
 		}
-	} else if *h.info.chrootFlag != "" && *h.info.chrootFlag != "/" {
+	} else if *chrootFlag != "" && *chrootFlag != "/" {
 		return fmt.Errorf("Must set UID and GID to use chroot")
 	}
 
