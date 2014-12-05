@@ -8,6 +8,11 @@ import "os/signal"
 import "syscall"
 import "github.com/hlandau/degoutils/daemon"
 import "fmt"
+import "flag"
+import "net/http"
+import "runtime/pprof"
+import _ "net/http/pprof"
+import _ "expvar"
 
 // This function should typically be called directly from func main(). It takes
 // care of all housekeeping for running services and handles service lifecycle.
@@ -33,7 +38,7 @@ type Manager interface {
 
 // An instantiable service.
 type Info struct {
-	Name        string // Required. Codename for the service, e.g. "foobar"
+	Name string // Required. Codename for the service, e.g. "foobar"
 
 	// Required. Starts the service. Must not return until the service has
 	// stopped. Must call smgr.SetStarted() to indicate when it has finished
@@ -45,9 +50,9 @@ type Info struct {
 	Title       string // Optional. Friendly name for the service, e.g. "Foobar Web Server"
 	Description string // Optional. Single line description for the service
 
-	AllowRoot bool        // May the service run as root? If false, the service will refuse to run as root.
-	DefaultChroot string  // Default path to chroot to. Use this if the service can be chrooted without consequence.
-	NoBanSuid bool        // Set to true if the ability to execute suid binaries must be retained.
+	AllowRoot     bool   // May the service run as root? If false, the service will refuse to run as root.
+	DefaultChroot string // Default path to chroot to. Use this if the service can be chrooted without consequence.
+	NoBanSuid     bool   // Set to true if the ability to execute suid binaries must be retained.
 
 	// Are we being started by systemd with [Service] Type=notify?
 	// If so, we can issue service status notifications to systemd.
@@ -55,11 +60,34 @@ type Info struct {
 
 	// Path to created PID file.
 	pidFileName string
+
+	// Flags
+	fs                  *flag.FlagSet
+	debugServerAddrFlag *string
+	cpuProfileFlag      *string
+
+	// UNIX only
+	uidFlag       *string
+	gidFlag       *string
+	daemonizeFlag *bool
+	chrootFlag    *string
+	pidfileFlag   *string
+
+	// Windows only
+	serviceFlag *string
 }
 
 var EmptyChrootPath = daemon.EmptyChrootPath
 
 func (info *Info) main() {
+	err := info.maine()
+	if err != nil {
+		fmt.Printf("Error: %+v\n", err)
+		os.Exit(1)
+	}
+}
+
+func (info *Info) maine() error {
 	if info.Name == "" {
 		panic("service name must be specified")
 	}
@@ -70,11 +98,48 @@ func (info *Info) main() {
 		info.Description = info.Title
 	}
 
-	err := info.serviceMain()
+	info.fs = flag.NewFlagSet("Service Options", flag.ContinueOnError)
+	info.debugServerAddrFlag = info.fs.String("debugserveraddr", "", "Address for debug server to listen on (do not specify a public address) (default: disabled)")
+	info.cpuProfileFlag = info.fs.String("cpuprofile", "", "Write CPU profile to file")
+
+	err := info.registerFlags()
 	if err != nil {
-		fmt.Printf("Error: %+v\n", err)
-		os.Exit(1)
+		panic(err)
 	}
+
+	info.fs.Parse(os.Args[1:]) // ignore errors
+
+	err = info.commonPre()
+	if err != nil {
+		return err
+	}
+
+	// profiling
+	if *info.cpuProfileFlag != "" {
+		f, err := os.Create(*info.cpuProfileFlag)
+		if err != nil {
+			return err
+		}
+		pprof.StartCPUProfile(f)
+		defer f.Close()
+		defer pprof.StopCPUProfile()
+	}
+
+	err = info.serviceMain()
+
+	return err
+}
+
+func (info *Info) commonPre() error {
+	if *info.debugServerAddrFlag != "" {
+		go func() {
+			err := http.ListenAndServe(*info.debugServerAddrFlag, nil)
+			if err != nil {
+				fmt.Printf("Couldn't start debug server: %+v\n", err)
+			}
+		}()
+	}
+	return nil
 }
 
 type ihandler struct {

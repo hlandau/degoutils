@@ -1,4 +1,5 @@
 package service
+
 import "syscall"
 import "fmt"
 import "github.com/hlandau/degoutils/daemon"
@@ -32,16 +33,16 @@ func (h *ihandler) banSuid() error {
 }
 
 const (
-	pPR_SET_SECCOMP       = 22
-	pPR_SET_SECUREBITS    = 28
-	pPR_SET_NO_NEW_PRIVS  = 36
+	pPR_SET_SECCOMP      = 22
+	pPR_SET_SECUREBITS   = 28
+	pPR_SET_NO_NEW_PRIVS = 36
 
-	sSECBIT_NOROOT                 = 1<<0
-	sSECBIT_NOROOT_LOCKED          = 1<<1
-	sSECBIT_NO_SETUID_FIXUP        = 1<<2
-	sSECBIT_NO_SETUID_FIXUP_LOCKED = 1<<3
-	sSECBIT_KEEP_CAPS              = 1<<4
-	sSECBIT_KEEP_CAPS_LOCKED       = 1<<5
+	sSECBIT_NOROOT                 = 1 << 0
+	sSECBIT_NOROOT_LOCKED          = 1 << 1
+	sSECBIT_NO_SETUID_FIXUP        = 1 << 2
+	sSECBIT_NO_SETUID_FIXUP_LOCKED = 1 << 3
+	sSECBIT_KEEP_CAPS              = 1 << 4
+	sSECBIT_KEEP_CAPS_LOCKED       = 1 << 5
 )
 
 func prctl(opt int, arg2, arg3, arg4, arg5 uint64) error {

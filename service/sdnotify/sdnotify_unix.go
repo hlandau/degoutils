@@ -1,4 +1,5 @@
 package sdnotify
+
 import "errors"
 import "net"
 import "sync"
@@ -25,7 +26,7 @@ func SdNotify(state string) error {
 
 		socketAddr := &net.UnixAddr{
 			Name: os.Getenv("NOTIFY_SOCKET"),
-			Net: "unixgram",
+			Net:  "unixgram",
 		}
 
 		if socketAddr.Name == "" {

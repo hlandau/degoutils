@@ -1,4 +1,5 @@
 package service_test
+
 import "github.com/hlandau/degoutils/service"
 
 // The following example illustrates the minimal skeleton structure to impleent
@@ -6,8 +7,8 @@ import "github.com/hlandau/degoutils/service"
 // daemon on Linux. The systemd notify protocol is supported.
 func Example() {
 	service.Main(&service.Info{
-		Title: "Foobar Web Server",
-		Name: "foobar",
+		Title:       "Foobar Web Server",
+		Name:        "foobar",
 		Description: "Foobar Web Server is the greatest webserver ever.",
 
 		RunFunc: func(smgr service.Manager) error {

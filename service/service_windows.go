@@ -16,13 +16,11 @@ func setproctitle(status string) error {
 	return nil
 }
 
-var serviceFlag = flag.String("service", "", "service command (one of: start, stop, install, remove)")
-
 type handler struct {
-	info *Info
+	info        *Info
 	startedChan chan struct{}
-	stopChan chan struct{}
-	status string
+	stopChan    chan struct{}
+	status      string
 }
 
 func (h *handler) DropPrivileges() error {
@@ -36,8 +34,8 @@ func (h *handler) SetStarted() {
 	}
 
 	select {
-		case h.startedChan <- struct{}{}:
-		default:
+	case h.startedChan <- struct{}{}:
+	default:
 	}
 }
 
@@ -53,7 +51,7 @@ func (h *handler) Execute(args []string, r <-chan svc.ChangeRequest, changes cha
 	const cmdsAccepted = svc.AcceptStop | svc.AcceptShutdown
 	changes <- svc.Status{State: svc.StartPending}
 
-	h.startedChan = make(chan struct{},1)
+	h.startedChan = make(chan struct{}, 1)
 	h.stopChan = make(chan struct{})
 	doneChan := make(chan error)
 	started := false
@@ -67,32 +65,32 @@ func (h *handler) Execute(args []string, r <-chan svc.ChangeRequest, changes cha
 loop:
 	for {
 		select {
-			case c := <-r:
-				switch c.Cmd {
-					case svc.Interrogate:
-						changes <- c.CurrentStatus
+		case c := <-r:
+			switch c.Cmd {
+			case svc.Interrogate:
+				changes <- c.CurrentStatus
 
-					case svc.Stop, svc.Shutdown:
-						// Service stop is pending. Don't accept any more commands while pending.
-						changes <- svc.Status{State: svc.StopPending}
-						if !stopping {
-							stopping = true
-							close(h.stopChan)
-						}
-
-					default:
-						// Unexpected control request
+			case svc.Stop, svc.Shutdown:
+				// Service stop is pending. Don't accept any more commands while pending.
+				changes <- svc.Status{State: svc.StopPending}
+				if !stopping {
+					stopping = true
+					close(h.stopChan)
 				}
 
-			case <-h.startedChan:
-				if started {
-					panic("must not call SetStarted() more than once")
-				}
-				started = true
-				changes <- svc.Status{State: svc.Running, Accepts: cmdsAccepted}
+			default:
+				// Unexpected control request
+			}
 
-			case err := <-doneChan:
-				break loop
+		case <-h.startedChan:
+			if started {
+				panic("must not call SetStarted() more than once")
+			}
+			started = true
+			changes <- svc.Status{State: svc.Running, Accepts: cmdsAccepted}
+
+		case err := <-doneChan:
+			break loop
 		}
 	}
 
@@ -110,7 +108,7 @@ func isInteractive() bool {
 
 func (info *Info) installService() error {
 	svcName := info.Name
-	
+
 	// Connect to the Windows service manager.
 	serviceManager, err := mgr.Connect()
 	if err != nil {
@@ -214,12 +212,12 @@ func (info *Info) controlService(c svc.Cmd, to svc.State) error {
 	}
 
 	// Wait.
-	timeout := time.Now().Add(10*time.Second)
+	timeout := time.Now().Add(10 * time.Second)
 	for status.State != to {
 		if timeout.Before(time.Now()) {
 			return fmt.Errorf("timeout waiting for service to go to state=%d", to)
 		}
-		time.Sleep(300*time.Millisecond)
+		time.Sleep(300 * time.Millisecond)
 		status, err = service.Query()
 		if err != nil {
 			return fmt.Errorf("could not retrieve service status: %v", err)
@@ -244,22 +242,23 @@ func (info *Info) runAsService() error {
 	return nil
 }
 
-func (info *Info) serviceMain() error {
-	if !flags.Parsed() {
-		flags.Parse()
-	}
+func (info *Info) registerFlags() error {
+	info.serviceFlag = info.fs.String("service", "", "service command (one of: start, stop, install, remove)")
+	return nil
+}
 
+func (info *Info) serviceMain() error {
 	switch *serviceFlag {
-		case "install":
-			return info.installService()
-		case "remove":
-			return info.removeService()
-		case "start":
-			return info.startService()
-		case "stop":
-			return info.stopService()
-		default:
-			// ...
+	case "install":
+		return info.installService()
+	case "remove":
+		return info.removeService()
+	case "start":
+		return info.startService()
+	case "stop":
+		return info.stopService()
+	default:
+		// ...
 	}
 
 	interactive := isInteractive()

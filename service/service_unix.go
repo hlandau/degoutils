@@ -1,17 +1,11 @@
 package service
+
 import "github.com/hlandau/degoutils/passwd"
 import "github.com/hlandau/degoutils/daemon"
 import "github.com/hlandau/degoutils/service/sdnotify"
 import "github.com/ErikDubbelboer/gspt"
-import "flag"
 import "fmt"
 import "strconv"
-
-var uidFlag = flag.String("uid", "", "UID to run as (default: don't drop privileges)")
-var gidFlag = flag.String("gid", "", "GID to run as (default: don't drop privileges)")
-var daemonizeFlag = flag.Bool("daemon", false, "Run as daemon? (doesn't fork)")
-var chrootFlag = flag.String("chroot", "", "Chroot to a directory (must set UID, GID) (\"/\" disables)")
-var pidfileFlag = flag.String("pidfile", "", "Write PID to file with given filename and hold a write lock")
 
 func systemdUpdateStatus(status string) error {
 	return sdnotify.SdNotify(status)
@@ -22,14 +16,19 @@ func setproctitle(status string) error {
 	return nil
 }
 
+func (info *Info) registerFlags() error {
+	info.uidFlag = info.fs.String("uid", "", "UID to run as (default: don't drop privileges)")
+	info.gidFlag = info.fs.String("gid", "", "GID to run as (default: don't drop privileges)")
+	info.daemonizeFlag = info.fs.Bool("daemon", false, "Run as daemon? (doesn't fork)")
+	info.chrootFlag = info.fs.String("chroot", "", "Chroot to a directory (must set UID, GID) (\"/\" disables)")
+	info.pidfileFlag = info.fs.String("pidfile", "", "Write PID to file with given filename and hold a write lock")
+	return nil
+}
+
 func (info *Info) serviceMain() error {
 	err := daemon.Init()
 	if err != nil {
 		return err
-	}
-
-	if !flag.Parsed() {
-		flag.Parse()
 	}
 
 	err = systemdUpdateStatus("\n")
@@ -37,8 +36,8 @@ func (info *Info) serviceMain() error {
 		info.systemd = true
 	}
 
-	if *pidfileFlag != "" {
-		info.pidFileName = *pidfileFlag
+	if *info.pidfileFlag != "" {
+		info.pidFileName = *info.pidfileFlag
 
 		err = info.openPIDFile()
 		if err != nil {
@@ -64,26 +63,26 @@ func (h *ihandler) DropPrivileges() error {
 		return nil
 	}
 
-	if *daemonizeFlag || h.info.systemd {
+	if *h.info.daemonizeFlag || h.info.systemd {
 		err := daemon.Daemonize()
 		if err != nil {
 			return err
 		}
 	}
 
-	if *uidFlag != "" && *gidFlag == "" {
-		gid, err := passwd.GetGIDForUID(*uidFlag)
+	if *h.info.uidFlag != "" && *h.info.gidFlag == "" {
+		gid, err := passwd.GetGIDForUID(*h.info.uidFlag)
 		if err != nil {
 			return err
 		}
-		*gidFlag = strconv.FormatInt(int64(gid), 10)
+		*h.info.gidFlag = strconv.FormatInt(int64(gid), 10)
 	}
 
 	if h.info.DefaultChroot == "" {
 		h.info.DefaultChroot = "/"
 	}
 
-	chrootPath := *chrootFlag
+	chrootPath := *h.info.chrootFlag
 	if chrootPath == "" {
 		chrootPath = h.info.DefaultChroot
 	}
@@ -93,12 +92,12 @@ func (h *ihandler) DropPrivileges() error {
 		return err
 	}
 
-	if *uidFlag != "" {
-		uid, err := passwd.ParseUID(*uidFlag)
+	if *h.info.uidFlag != "" {
+		uid, err := passwd.ParseUID(*h.info.uidFlag)
 		if err != nil {
 			return err
 		}
-		gid, err := passwd.ParseGID(*gidFlag)
+		gid, err := passwd.ParseGID(*h.info.gidFlag)
 		if err != nil {
 			return err
 		}
@@ -107,7 +106,7 @@ func (h *ihandler) DropPrivileges() error {
 		if err != nil {
 			return err
 		}
-	} else if *chrootFlag != "" && *chrootFlag != "/" {
+	} else if *h.info.chrootFlag != "" && *h.info.chrootFlag != "/" {
 		return fmt.Errorf("Must set UID and GID to use chroot")
 	}
 
