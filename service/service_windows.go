@@ -8,6 +8,9 @@ import "os"
 import "time"
 import "fmt"
 
+var serviceFlag = fs.String("service", "", "service command (one of: start, stop, install, remove)")
+var _serviceFlag = flag.String("service", "", "service command (one of: start, stop, install, remove)")
+
 func systemdUpdateStatus(status string) error {
 	return fmt.Errorf("not supported")
 }
@@ -239,11 +242,6 @@ func (info *Info) runAsService() error {
 		return err
 	}
 
-	return nil
-}
-
-func (info *Info) registerFlags() error {
-	info.serviceFlag = info.fs.String("service", "", "service command (one of: start, stop, install, remove)")
 	return nil
 }
 

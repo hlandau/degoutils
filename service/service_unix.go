@@ -5,13 +5,19 @@ import "github.com/hlandau/degoutils/daemon"
 import "github.com/hlandau/degoutils/service/sdnotify"
 import "github.com/ErikDubbelboer/gspt"
 import "fmt"
+import "flag"
 import "strconv"
 
 var uidFlag = fs.String("uid", "", "UID to run as (default: don't drop privileges)")
+var _uidFlag = flag.String("uid", "", "UID to run as (default: don't drop privileges)")
 var gidFlag = fs.String("gid", "", "GID to run as (default: don't drop privileges)")
+var _gidFlag = flag.String("gid", "", "GID to run as (default: don't drop privileges)")
 var daemonizeFlag = fs.Bool("daemon", false, "Run as daemon? (doesn't fork)")
+var _daemonizeFlag = flag.Bool("daemon", false, "Run as daemon? (doesn't fork)")
 var chrootFlag = fs.String("chroot", "", "Chroot to a directory (must set UID, GID) (\"/\" disables)")
+var _chrootFlag = flag.String("chroot", "", "Chroot to a directory (must set UID, GID) (\"/\" disables)")
 var pidfileFlag = fs.String("pidfile", "", "Write PID to file with given filename and hold a write lock")
+var _pidfileFlag = flag.String("pidfile", "", "Write PID to file with given filename and hold a write lock")
 
 func systemdUpdateStatus(status string) error {
 	return sdnotify.SdNotify(status)

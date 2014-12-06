@@ -12,21 +12,19 @@ import "flag"
 import "net/http"
 import "runtime/pprof"
 import _ "net/http/pprof"
-import _ "expvar"
+import "expvar"
+import "time"
 
 // Flags
 
 var fs = flag.NewFlagSet("Service Options", flag.ContinueOnError)
-var debugServerAddrFlag = fs.String("debugserveraddr", "", "Address for debu server to listen on (do not specify a public address) (default: isabled)")
+var debugServerAddrFlag = fs.String("debugserveraddr", "", "Address for debug server to listen on (do not specify a public address) (default: disabled)")
+var _debugServerAddrFlag = flag.String("debugserveraddr", "", "Address for debug server to listen on (do not specify a public address) (default: disabled)")
 var cpuProfileFlag = fs.String("cpuprofile", "", "Write CPU profile to file")
+var _cpuProfileFlag = flag.String("cpuprofile", "", "Write CPU profile to file")
 
 func init() {
-	oldUsage := flag.Usage
-	flag.Usage = func() {
-		oldUsage()
-		fmt.Printf("\nService Options:\n")
-		fs.PrintDefaults()
-	}
+	expvar.NewString("startTime").Set(time.Now().String())
 }
 
 // This function should typically be called directly from func main(). It takes
