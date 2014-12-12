@@ -2,6 +2,7 @@ package service
 
 import "github.com/hlandau/degoutils/passwd"
 import "github.com/hlandau/degoutils/daemon"
+import "github.com/hlandau/degoutils/daemon/pidfile"
 import "github.com/hlandau/degoutils/service/sdnotify"
 import "github.com/ErikDubbelboer/gspt"
 import "fmt"
@@ -18,6 +19,8 @@ var chrootFlag = fs.String("chroot", "", "Chroot to a directory (must set UID, G
 var _chrootFlag = flag.String("chroot", "", "Chroot to a directory (must set UID, GID) (\"/\" disables)")
 var pidfileFlag = fs.String("pidfile", "", "Write PID to file with given filename and hold a write lock")
 var _pidfileFlag = flag.String("pidfile", "", "Write PID to file with given filename and hold a write lock")
+var dropprivsFlag = fs.Bool("dropprivs", true, "Drop privileges?")
+var _dropprivsFlag = flag.Bool("dropprivs", true, "Drop privileges?")
 
 func systemdUpdateStatus(status string) error {
 	return sdnotify.SdNotify(status)
@@ -54,11 +57,11 @@ func (info *Info) serviceMain() error {
 }
 
 func (info *Info) openPIDFile() error {
-	return daemon.OpenPIDFile(info.pidFileName)
+	return pidfile.OpenPIDFile(info.pidFileName)
 }
 
 func (info *Info) closePIDFile() {
-	daemon.ClosePIDFile()
+	pidfile.ClosePIDFile()
 }
 
 func (h *ihandler) DropPrivileges() error {
@@ -90,31 +93,35 @@ func (h *ihandler) DropPrivileges() error {
 		chrootPath = h.info.DefaultChroot
 	}
 
-	err := h.dropPrivilegesExtra()
-	if err != nil {
-		return err
+	uid := -1
+	gid := -1
+	if *uidFlag != "" {
+		var err error
+		uid, err = passwd.ParseUID(*uidFlag)
+		if err != nil {
+			return err
+		}
+
+		gid, err = passwd.ParseGID(*gidFlag)
+		if err != nil {
+			return err
+		}
 	}
 
-	if *uidFlag != "" {
-		uid, err := passwd.ParseUID(*uidFlag)
+	if *dropprivsFlag {
+		chrootErr, err := daemon.DropPrivileges(uid, gid, chrootPath)
 		if err != nil {
 			return err
 		}
-		gid, err := passwd.ParseGID(*gidFlag)
-		if err != nil {
-			return err
-		}
-
-		err = daemon.DropPrivileges(uid, gid, chrootPath)
-		if err != nil {
-			return err
+		if chrootErr != nil && *chrootFlag != "" && *chrootFlag != "/" {
+			return fmt.Errorf("Failed to chroot: %v", chrootErr)
 		}
 	} else if *chrootFlag != "" && *chrootFlag != "/" {
-		return fmt.Errorf("Must set UID and GID to use chroot")
+		return fmt.Errorf("Must set dropprivs to use chroot")
 	}
 
 	if !h.info.AllowRoot && daemon.IsRoot() {
-		return fmt.Errorf("Daemon must not run as root")
+		return fmt.Errorf("Daemon must not run as root or with capabilities")
 	}
 
 	h.dropped = true

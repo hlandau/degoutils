@@ -6,7 +6,8 @@ import "net"
 import "os"
 import "errors"
 import "github.com/hlandau/degoutils/passwd"
-import "fmt"
+import "github.com/hlandau/degoutils/daemon/setuid"
+import "github.com/hlandau/degoutils/daemon/caps"
 
 // Initialises a daemon with recommended values.
 //
@@ -73,8 +74,19 @@ func Daemonize() error {
 	return nil
 }
 
+// Returns true if either or both of the following are true:
+//
+// Any of the UID, EUID, GID or EGID are zero.
+//
+// On supported platforms which support capabilities (currently Linux), any
+// capabilities are present.
 func IsRoot() bool {
-	return syscall.Getuid() == 0 || syscall.Geteuid() == 0 || syscall.Getgid() == 0 || syscall.Getegid() == 0
+	return caps.EnsureNoCaps() != nil || isRoot()
+}
+
+func isRoot() bool {
+	return syscall.Getuid() == 0 || syscall.Geteuid() == 0 ||
+		syscall.Getgid() == 0 || syscall.Getegid() == 0
 }
 
 // Drops privileges to the specified UID and GID.
@@ -88,171 +100,155 @@ func IsRoot() bool {
 //
 // The function ensures that /etc/hosts and /etc/resolv.conf are loaded before
 // chrooting, so name service should continue to be available.
-func DropPrivileges(UID, GID int, chrootDir string) error {
-	if !IsRoot() {
-		return nil
-	}
-
-	if UID == 0 {
-		return errors.New("Can't drop privileges to UID 0 - did you set the UID properly?")
-	}
-
-	if GID == 0 {
-		return errors.New("Can't drop privileges to GID 0 - did you set the GID properly?")
-	}
-
-	gids, err := passwd.GetExtraGIDs(GID)
+func DropPrivileges(UID, GID int, chrootDir string) (chrootErr error, err error) {
+	err = setRlimits()
 	if err != nil {
-		return err
+		return
 	}
 
-	if chrootDir == "/" {
-		chrootDir = ""
+	err = platformPreDropPrivileges()
+	if err != nil {
+		return
 	}
 
-	if chrootDir != "" {
-		c, err := net.Dial("udp", "un_localhost:1")
-		if err != nil {
-			//
-		} else {
-			c.Close()
-		}
-
-		err = syscall.Chroot(chrootDir)
-		if err != nil {
-			return err
-		}
+	// chroot and set UID and GIDs
+	chrootErr, err = dropPrivileges(UID, GID, chrootDir)
+	if err != nil {
+		return
 	}
 
 	err = syscall.Chdir("/")
 	if err != nil {
-		return err
+		return
 	}
+
+	err = ensureNoPrivs()
+	if err != nil {
+		return
+	}
+
+	err = platformPostDropPrivileges()
+	if err != nil {
+		return
+	}
+
+	err = nil
+	return
+}
+
+func setRlimits() error {
+	// TODO
+	return nil
+}
+
+func dropPrivileges(UID, GID int, chrootDir string) (chrootErr error, err error) {
+	if (UID == -1) != (GID == -1) {
+		return nil, errors.New("either both or neither UID and GID must be -1")
+	}
+
+	var gids []int
+	if UID != -1 {
+		gids, err = passwd.GetExtraGIDs(GID)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	chrootErr = tryChroot(chrootDir)
 
 	gids = append(gids, GID)
 
-	err = syscall.Setgroups(gids)
+	err = tryDropPrivileges(UID, GID, gids)
+	if err == errZeroUID {
+		return
+	} else if err != nil {
+		if caps.PlatformSupportsCaps {
+			// We can't setuid, so maybe we only have a few caps.
+			// Drop them.
+			err = caps.DropCaps()
+			return
+		} else {
+			return
+		}
+	}
+
+	err = nil
+	return
+}
+
+var errZeroUID = errors.New("Can't drop privileges to UID/GID0 - did you set the UID/GID properly?")
+
+func tryDropPrivileges(UID, GID int, gids []int) error {
+	if UID == -1 {
+		return errors.New("invalid UID specified so cannot setuid")
+	}
+
+	err := setuid.Setgroups(gids)
 	if err != nil {
 		return err
 	}
 
-	err = syscall.Setresgid(GID, GID, GID)
+	err = setuid.Setresgid(GID, GID, GID)
 	if err != nil {
 		return err
 	}
 
-	err = syscall.Setresuid(UID, UID, UID)
+	err = setuid.Setresuid(UID, UID, UID)
 	if err != nil {
 		return err
 	}
 
-	err = syscall.Setuid(0)
+	if UID == 0 || GID == 0 {
+		return errZeroUID
+	}
+
+	return nil
+}
+
+func tryChroot(path string) error {
+	if path == "/" {
+		path = ""
+	}
+
+	if path == "" {
+		return nil
+	}
+
+	ensureResolverConfigIsLoaded()
+
+	err := syscall.Chroot(path)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func ensureResolverConfigIsLoaded() {
+	c, err := net.Dial("udp", "un_localhost:1")
+	if err != nil {
+
+	} else {
+		c.Close()
+	}
+}
+
+func ensureNoPrivs() error {
+	if isRoot() {
+		return errors.New("still have non-zero UID or GID")
+	}
+
+	err := setuid.Setuid(0)
 	if err == nil {
 		return errors.New("Can't drop privileges - setuid(0) still succeeded")
 	}
 
-	return nil
-}
-
-var pidFile *os.File
-var pidFileName string
-
-// Opens a PID file. The PID of the current process is written to the file
-// and the file is locked. The file is kept open until the process terminates.
-// Only one PID file must be called at a time, so this function must not be
-// called again unless ClosePIDFile() has been called.
-func OpenPIDFile(filename string) error {
-	if pidFile != nil {
-		return fmt.Errorf("PID file already opened")
+	err = setuid.Setgid(0)
+	if err == nil {
+		return errors.New("Can't drop privileges - setgid(0) still succeeded")
 	}
 
-	f, err := openPIDFile(filename)
-	if err != nil {
-		return err
-	}
-
-	s := fmt.Sprintf("%d\n", os.Getpid())
-	_, err = f.WriteString(s)
-	if err != nil {
-		f.Close()
-		return err
-	}
-
-	pidFile = f
-	pidFileName = filename
-
-	return nil
-}
-
-// Closes any previously opened PID file.
-func ClosePIDFile() {
-	if pidFile != nil {
-		// try and remove file, don't care if it fails
-		os.Remove(pidFileName)
-
-		pidFile.Close()
-		pidFile = nil
-		pidFileName = ""
-	}
-}
-
-func openPIDFile(filename string) (*os.File, error) {
-	var f *os.File
-	var err error
-
-	for {
-		f, err = os.OpenFile(filename,
-			syscall.O_RDWR | syscall.O_CREAT | syscall.O_EXCL, 420 /* 0644 */)
-		if err != nil {
-			if !os.IsExist(err) {
-				return nil, err
-			}
-
-			f, err = os.OpenFile(filename, syscall.O_RDWR, 420 /* 0644 */)
-			if err != nil {
-				if os.IsNotExist(err) {
-					continue
-				}
-				return nil, err
-			}
-		}
-
-		err = syscall.FcntlFlock(f.Fd(), syscall.F_SETLK, &syscall.Flock_t{
-			Type: syscall.F_WRLCK,
-		})
-		if err != nil {
-			f.Close()
-			return nil, err
-		}
-
-		st1 := syscall.Stat_t{}
-		err = syscall.Fstat(int(f.Fd()), &st1) // ffs
-		if err != nil {
-			f.Close()
-			return nil, err
-		}
-
-		st2 := syscall.Stat_t{}
-		err = syscall.Stat(filename, &st2)
-		if err != nil {
-			f.Close()
-
-			if os.IsNotExist(err) {
-				continue
-			}
-
-			return nil, err
-		}
-
-		if st1.Ino != st2.Ino {
-			f.Close()
-			continue
-		}
-
-		break
-	}
-
-	return f, nil
+	return caps.EnsureNoCaps()
 }
 
 var EmptyChrootPath = "/var/empty"
