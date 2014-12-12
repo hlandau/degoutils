@@ -146,6 +146,12 @@ func dropPrivileges(UID, GID int, chrootDir string) (chrootErr error, err error)
 		return nil, errors.New("either both or neither UID and GID must be -1")
 	}
 
+	if isRoot() {
+		if UID <= 0 || GID <= 0 {
+			return nil, errors.New("must specify UID/GID when running as root")
+		}
+	}
+
 	var gids []int
 	if UID != -1 {
 		gids, err = passwd.GetExtraGIDs(GID)

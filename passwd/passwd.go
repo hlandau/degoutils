@@ -47,7 +47,7 @@ func GetGIDForUID(uid string) (int, error) {
 //export de_gid_cb
 func de_gid_cb(p unsafe.Pointer, gid C.gid_t) {
 	f := *(*func(C.gid_t))(p)
-  f(gid)
+	f(gid)
 }
 
 func GetExtraGIDs(gid int) (gids []int, err error) {

@@ -46,10 +46,10 @@ type Backoff struct {
 // automatically.
 func (rc *Backoff) InitDefaults() {
 	if rc.InitialDelay == 0 {
-		rc.InitialDelay = 5*time.Second
+		rc.InitialDelay = 5 * time.Second
 	}
 	if rc.MaxDelay == 0 {
-		rc.MaxDelay = 120*time.Second
+		rc.MaxDelay = 120 * time.Second
 	}
 	if rc.MaxDelayAfterTries == 0 {
 		rc.MaxDelayAfterTries = 10
@@ -64,10 +64,10 @@ func (rc *Backoff) NextDelay() time.Duration {
 		return time.Duration(0)
 	}
 
-	initialDelay        := float64(rc.InitialDelay)
-	maxDelay            := float64(rc.MaxDelay)
-	maxDelayAfterTries  := float64(rc.MaxDelayAfterTries)
-	currentTry          := float64(rc.CurrentTry)
+	initialDelay := float64(rc.InitialDelay)
+	maxDelay := float64(rc.MaxDelay)
+	maxDelayAfterTries := float64(rc.MaxDelayAfterTries)
+	currentTry := float64(rc.CurrentTry)
 
 	// [from backoff.c]
 	k := math.Log2(maxDelay/initialDelay) / maxDelayAfterTries
@@ -79,7 +79,7 @@ func (rc *Backoff) NextDelay() time.Duration {
 	}
 
 	if rc.Jitter != 0 {
-		f := (randr.Float64()-0.5)*2 // random value in range [-1,1)
+		f := (randr.Float64() - 0.5) * 2 // random value in range [-1,1)
 		d = time.Duration(float64(d) * (1 + rc.Jitter*f))
 	}
 
