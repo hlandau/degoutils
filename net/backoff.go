@@ -87,8 +87,13 @@ func (rc *Backoff) NextDelay() time.Duration {
 }
 
 // Sleep for the duration returned by NextDelay().
-func (rc *Backoff) Sleep() {
-	time.Sleep(rc.NextDelay())
+func (rc *Backoff) Sleep() bool {
+	d := rc.NextDelay()
+	if d != 0 {
+		time.Sleep(d)
+		return true
+	}
+	return false
 }
 
 // Sets the internal try counter to zero; the next delay returned will be
