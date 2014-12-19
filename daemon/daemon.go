@@ -8,15 +8,57 @@ import "errors"
 import "github.com/hlandau/degoutils/passwd"
 import "github.com/hlandau/degoutils/daemon/setuid"
 import "github.com/hlandau/degoutils/daemon/caps"
+import "path/filepath"
 
-// Initialises a daemon with recommended values.
+// Absolute path to EXE which was invoked. This is set at init()-time
+// to ensure that argv[0] can be properly interpreted before chdir is called.
+var AbsExePath string
+
+func init() {
+	AbsExePath = os.Args[0]
+	dir, err := filepath.Abs(AbsExePath)
+	if err != nil {
+		return
+	}
+
+	AbsExePath = dir
+}
+
+// Initialises a daemon with recommended values. Called by Daemonize.
 //
-// Currently, this only calls umask(0).
+// Currently, this only calls umask(0) and chdir("/").
 func Init() error {
 	syscall.Umask(0)
 
+	err := syscall.Chdir("/")
+	if err != nil {
+		return err
+	}
+
 	// setrlimit RLIMIT_CORE
 	return nil
+}
+
+// Psuedo-forks by re-executing the current binary with a special command line
+// argument telling it not to re-execute itself again. Returns true in the
+// parent process and false in the child.
+func Fork() (isParent bool, err error) {
+	if os.Args[len(os.Args)-1] == "--_FORKED_" {
+		os.Args = os.Args[0 : len(os.Args)-1]
+		return false, nil
+	}
+
+	newArgs := make([]string, 0, len(os.Args)+1)
+	newArgs = append(newArgs, os.Args...)
+	newArgs = append(newArgs, "--_FORKED_")
+
+	proc, err := os.StartProcess(AbsExePath, newArgs, nil)
+	if err != nil {
+		return true, err
+	}
+
+	proc.Release()
+	return true, nil
 }
 
 // Daemonizes but doesn't fork.
@@ -65,13 +107,8 @@ func Daemonize() error {
 	// This may fail if we're not root
 	syscall.Setsid()
 
-	//
-	err = syscall.Chdir("/")
-	if err != nil {
-		return err
-	}
-
-	return nil
+	// Daemonize implies Init.
+	return Init()
 }
 
 // Returns true if either or both of the following are true:

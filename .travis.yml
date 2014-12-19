@@ -6,3 +6,8 @@ before_install:
   - sudo add-apt-repository -y ppa:bpaquet/zeromq4-precise
   - if [ "$TRAVIS_OS_NAME" == "linux" ]; then travis_retry sudo apt-get update -qq; fi
   - if [ "$TRAVIS_OS_NAME" == "linux" ]; then travis_retry sudo apt-get install -qq libzmq-dev libcap-dev; fi
+notifications:
+  irc:
+    channels:
+      - "chat.freenode.net##hl-t"
+    skip_join: true
