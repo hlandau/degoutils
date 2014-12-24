@@ -39,20 +39,23 @@ func Init() error {
 	return nil
 }
 
+const forkedArg = "$*_FORKED_*$"
+
 // Psuedo-forks by re-executing the current binary with a special command line
 // argument telling it not to re-execute itself again. Returns true in the
 // parent process and false in the child.
 func Fork() (isParent bool, err error) {
-	if os.Args[len(os.Args)-1] == "--_FORKED_" {
+	if os.Args[len(os.Args)-1] == forkedArg {
 		os.Args = os.Args[0 : len(os.Args)-1]
 		return false, nil
 	}
 
-	newArgs := make([]string, 0, len(os.Args)+1)
-	newArgs = append(newArgs, os.Args...)
-	newArgs = append(newArgs, "--_FORKED_")
+	newArgs := make([]string, 0, len(os.Args))
+	newArgs = append(newArgs, AbsExePath)
+	newArgs = append(newArgs, os.Args[1:]...)
+	newArgs = append(newArgs, forkedArg)
 
-	proc, err := os.StartProcess(AbsExePath, newArgs, nil)
+	proc, err := os.StartProcess(AbsExePath, newArgs, &os.ProcAttr{})
 	if err != nil {
 		return true, err
 	}
@@ -75,6 +78,7 @@ func Daemonize() error {
 	if err != nil {
 		return err
 	}
+	defer null_f.Close()
 
 	stdin_fd := int(os.Stdin.Fd())
 	stdout_fd := int(os.Stdout.Fd())
@@ -95,11 +99,6 @@ func Daemonize() error {
 	}
 
 	err = syscall.Dup2(null_fd, stderr_fd)
-	if err != nil {
-		return err
-	}
-
-	err = null_f.Close()
 	if err != nil {
 		return err
 	}

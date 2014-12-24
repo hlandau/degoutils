@@ -5,6 +5,7 @@ import "github.com/hlandau/degoutils/daemon"
 import "github.com/hlandau/degoutils/daemon/pidfile"
 import "github.com/hlandau/degoutils/service/sdnotify"
 import "github.com/ErikDubbelboer/gspt"
+import "os"
 import "fmt"
 import "flag"
 import "strconv"
@@ -21,6 +22,8 @@ var pidfileFlag = fs.String("pidfile", "", "Write PID to file with given filenam
 var _pidfileFlag = flag.String("pidfile", "", "Write PID to file with given filename and hold a write lock")
 var dropprivsFlag = fs.Bool("dropprivs", true, "Drop privileges?")
 var _dropprivsFlag = flag.Bool("dropprivs", true, "Drop privileges?")
+var forkFlag = fs.Bool("fork", false, "Fork? (implies -daemon)")
+var _forkFlag = flag.Bool("fork", false, "Fork? (implies -daemon)")
 
 func systemdUpdateStatus(status string) error {
 	return sdnotify.SdNotify(status)
@@ -67,6 +70,19 @@ func (info *Info) closePIDFile() {
 func (h *ihandler) DropPrivileges() error {
 	if h.dropped {
 		return nil
+	}
+
+	if *forkFlag {
+		isParent, err := daemon.Fork()
+		if err != nil {
+			return err
+		}
+
+		if isParent {
+			os.Exit(0)
+		}
+
+		*daemonizeFlag = true
 	}
 
 	if *daemonizeFlag || h.info.systemd {
