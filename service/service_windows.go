@@ -1,8 +1,8 @@
 package service
 
-import "github.com/conformal/winsvc/eventlog"
-import "github.com/conformal/winsvc/mgr"
-import "github.com/conformal/winsvc/svc"
+import "github.com/btcsuite/winsvc/eventlog"
+import "github.com/btcsuite/winsvc/mgr"
+import "github.com/btcsuite/winsvc/svc"
 import "flag"
 import "os"
 import "time"
