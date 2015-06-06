@@ -65,6 +65,8 @@ func (h *handler) Execute(args []string, r <-chan svc.ChangeRequest, changes cha
 		doneChan <- err
 	}()
 
+	var err error
+
 loop:
 	for {
 		select {
@@ -92,13 +94,17 @@ loop:
 			started = true
 			changes <- svc.Status{State: svc.Running, Accepts: cmdsAccepted}
 
-		case err := <-doneChan:
+		case err = <-doneChan:
 			break loop
 		}
 	}
 
-	changes <- svc.Status{State: svc.Stopped}
-	return false, 0
+	if err == nil {
+		changes <- svc.Status{State: svc.Stopped}
+		return false, 0
+	} else {
+		return false, 1
+	}
 }
 
 func isInteractive() bool {
@@ -129,8 +135,10 @@ func (info *Info) installService() error {
 
 	// Install the service.
 	service, err = serviceManager.CreateService(svcName, exePath, mgr.Config{
-		DisplayName: info.Title,
-		Description: info.Description,
+		DisplayName:  info.Title,
+		Description:  info.Description,
+		StartType:    mgr.StartAutomatic,
+		ErrorControl: mgr.ErrorNormal,
 	})
 	if err != nil {
 		return err
