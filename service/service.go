@@ -18,8 +18,8 @@ import "time"
 // Flags
 
 var fs = flag.NewFlagSet("Service Options", flag.ContinueOnError)
-var debugServerAddrFlag = fs.String("debugserveraddr", "", "Address for debug server to listen on (do not specify a public address) (default: disabled)")
-var _debugServerAddrFlag = flag.String("debugserveraddr", "", "Address for debug server to listen on (do not specify a public address) (default: disabled)")
+var debugServerAddrFlag *string
+var _debugServerAddrFlag *string
 var cpuProfileFlag = fs.String("cpuprofile", "", "Write CPU profile to file")
 var _cpuProfileFlag = flag.String("cpuprofile", "", "Write CPU profile to file")
 
@@ -67,6 +67,8 @@ type Info struct {
 	DefaultChroot string // Default path to chroot to. Use this if the service can be chrooted without consequence.
 	NoBanSuid     bool   // Set to true if the ability to execute suid binaries must be retained.
 
+	UsesDefaultHTTP bool // Set to true if the service uses the default HTTP server instance.
+
 	// Are we being started by systemd with [Service] Type=notify?
 	// If so, we can issue service status notifications to systemd.
 	systemd bool
@@ -96,6 +98,11 @@ func (info *Info) maine() error {
 		info.Description = info.Title
 	}
 
+	if !info.UsesDefaultHTTP {
+		debugServerAddrFlag = fs.String("debugserveraddr", "", "Address for debug server to listen on (do not specify a public address) (default: disabled)")
+		_debugServerAddrFlag = flag.String("debugserveraddr", "", "Address for debug server to listen on (do not specify a public address) (default: disabled)")
+	}
+
 	fs.Parse(os.Args[1:]) // ignore errors
 
 	err := info.commonPre()
@@ -120,7 +127,7 @@ func (info *Info) maine() error {
 }
 
 func (info *Info) commonPre() error {
-	if *debugServerAddrFlag != "" {
+	if debugServerAddrFlag != nil && *debugServerAddrFlag != "" {
 		go func() {
 			err := http.ListenAndServe(*debugServerAddrFlag, nil)
 			if err != nil {
