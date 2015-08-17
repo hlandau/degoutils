@@ -35,6 +35,7 @@ hasanycap(void) {
   cap_free(zc);
   return hasCap;
 }
+#include <stdio.h>
 
 static int
 dropcaps(void) {
@@ -52,7 +53,7 @@ dropcaps(void) {
     return errno;
   }
 
-  if (!cap_set_proc(c)) {
+  if (cap_set_proc(c)) {
     cap_free(c);
     return errno;
   }

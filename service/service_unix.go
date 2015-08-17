@@ -1,6 +1,7 @@
 package service
 
 import "github.com/hlandau/degoutils/passwd"
+import "github.com/hlandau/degoutils/log"
 import "github.com/hlandau/degoutils/daemon"
 import "github.com/hlandau/degoutils/daemon/pidfile"
 import "github.com/hlandau/degoutils/service/sdnotify"
@@ -127,6 +128,7 @@ func (h *ihandler) DropPrivileges() error {
 	if *dropprivsFlag {
 		chrootErr, err := daemon.DropPrivileges(uid, gid, chrootPath)
 		if err != nil {
+			log.Errore(err, "cannot drop privileges")
 			return err
 		}
 		if chrootErr != nil && *chrootFlag != "" && *chrootFlag != "/" {

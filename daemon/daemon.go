@@ -5,6 +5,7 @@ import "syscall"
 import "net"
 import "os"
 import "errors"
+import "github.com/hlandau/degoutils/log"
 import "github.com/hlandau/degoutils/passwd"
 import "github.com/hlandau/degoutils/daemon/setuid"
 import "github.com/hlandau/degoutils/daemon/caps"
@@ -139,17 +140,20 @@ func isRoot() bool {
 func DropPrivileges(UID, GID int, chrootDir string) (chrootErr error, err error) {
 	err = setRlimits()
 	if err != nil {
+		log.Errore(err, "set rlimits")
 		return
 	}
 
 	err = platformPreDropPrivileges()
 	if err != nil {
+		log.Errore(err, "platform pre drop privileges")
 		return
 	}
 
 	// chroot and set UID and GIDs
 	chrootErr, err = dropPrivileges(UID, GID, chrootDir)
 	if err != nil {
+		log.Errore(err, "inner drop privileges")
 		return
 	}
 
@@ -160,11 +164,13 @@ func DropPrivileges(UID, GID int, chrootDir string) (chrootErr error, err error)
 
 	err = ensureNoPrivs()
 	if err != nil {
+		log.Errore(err, "ensure no privs")
 		return
 	}
 
 	err = platformPostDropPrivileges()
 	if err != nil {
+		log.Errore(err, "platform post drop privileges")
 		return
 	}
 
@@ -208,6 +214,7 @@ func dropPrivileges(UID, GID int, chrootDir string) (chrootErr error, err error)
 			// We can't setuid, so maybe we only have a few caps.
 			// Drop them.
 			err = caps.DropCaps()
+			log.Errore(err, "cannot drop caps")
 			return
 		} else {
 			return

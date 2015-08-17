@@ -82,7 +82,7 @@ var EmptyChrootPath = daemon.EmptyChrootPath
 func (info *Info) main() {
 	err := info.maine()
 	if err != nil {
-		fmt.Printf("Error: %+v\n", err)
+		fmt.Printf("Error in service: %+v\n", err)
 		os.Exit(1)
 	}
 }
