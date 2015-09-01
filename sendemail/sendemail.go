@@ -10,6 +10,9 @@ import "net/smtp"
 import "os"
 import "os/exec"
 import "net"
+import "github.com/hlandau/degoutils/metric"
+
+var cEmailsSent = metric.NewCounter("sendemail.emailsSent")
 
 type Config struct {
 	SMTPAddress  string
@@ -63,6 +66,8 @@ func (cfg *Config) SendEmail(e *Email) error {
 	e.rfc822Message = append(e.rfc822Message, serializeHeaders(e.Headers)...)
 	e.rfc822Message = append(e.rfc822Message, '\n')
 	e.rfc822Message = append(e.rfc822Message, e.Body...)
+
+	cEmailsSent.Add(1)
 
 	if cfg.SMTPAddress != "" {
 		return cfg.sendViaSMTP(e)
