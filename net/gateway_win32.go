@@ -7,6 +7,7 @@ package net
 import gnet "net"
 import "syscall"
 import "unsafe"
+import "os"
 
 func getAdapterList() (*syscall.IpAdapterInfo, error) {
 	b := make([]byte, 1000)
