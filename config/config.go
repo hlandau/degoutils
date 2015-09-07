@@ -117,6 +117,7 @@ func init() {
 	// (to which os.Args[0] is potentially relative) is changed, so we do it now.
 	var err error
 	exePath, err = filepath.Abs(os.Args[0])
+	//fmt.Printf("config file path: %s  %s\n", exePath, os.Args[0])
 	if err != nil {
 		panic("cannot determine absolute path of executable filename")
 	}
@@ -127,7 +128,9 @@ func resolvePath(p string) string {
 		return p
 	}
 
-	return filepath.Join(filepath.Dir(exePath), p[5:])
+	s := filepath.Join(filepath.Dir(exePath), p[5:])
+	//fmt.Printf("resolved %s -> %s\n", p, s)
+	return s
 }
 
 func (cc *Configurator) ParseFatal(target interface{}) {
@@ -216,13 +219,14 @@ func (cc *Configurator) parseFatal(target interface{}, noVars bool) {
 		cfiles = append(cfiles, cf)
 	}
 
+	//fmt.Printf("viable paths: %+v\n", cfiles)
 	if len(cfiles) > 0 {
 		for _, cfn := range cfiles {
 			fbuf, err := ioutil.ReadFile(cfn)
 			if err != nil {
 				if cfn == configFile {
 					// print error if config file was specified on command line
-					fmt.Printf("Error: cannot read config file \"%s\": %v", cfn, err)
+					fmt.Printf("Error: cannot read config file \"%s\": %v\n", cfn, err)
 				}
 				continue
 			}
@@ -232,7 +236,7 @@ func (cc *Configurator) parseFatal(target interface{}, noVars bool) {
 
 			_, err = toml.Decode(fdata, target)
 			if err != nil {
-				fmt.Printf("Cannot decode configuration file: %s", err)
+				fmt.Printf("Cannot decode configuration file: %s\n", err)
 				os.Exit(1)
 			}
 
