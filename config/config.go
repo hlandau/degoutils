@@ -6,6 +6,7 @@ import "gopkg.in/hlandau/configurable.v0"
 import "gopkg.in/hlandau/configurable.v0/cstruct"
 import "gopkg.in/hlandau/configurable.v0/adaptflag"
 import "gopkg.in/hlandau/configurable.v0/adaptconf"
+import "gopkg.in/hlandau/configurable.v0/adaptenv"
 import flag "github.com/ogier/pflag"
 
 type Configurator struct {
@@ -17,6 +18,7 @@ func (cfg *Configurator) ParseFatal(tgt interface{}) {
 	c := cstruct.MustNew(tgt, cfg.ProgramName)
 	configurable.Register(c)
 	adaptflag.Adapt()
+	adaptenv.Adapt()
 	flag.Parse()
 	err := adaptconf.Load(cfg.ProgramName)
 	if err != nil {
