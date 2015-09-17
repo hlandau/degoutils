@@ -7,7 +7,7 @@ import "gopkg.in/hlandau/configurable.v0/cstruct"
 import "gopkg.in/hlandau/configurable.v0/adaptflag"
 import "gopkg.in/hlandau/configurable.v0/adaptconf"
 import "gopkg.in/hlandau/configurable.v0/adaptenv"
-import flag "github.com/ogier/pflag"
+import "flag"
 
 type Configurator struct {
 	ProgramName    string
