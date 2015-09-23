@@ -10,9 +10,9 @@ import "net/smtp"
 import "os"
 import "os/exec"
 import "net"
-import "github.com/hlandau/degoutils/metric"
+import "gopkg.in/hlandau/easymetric.v1/cexp"
 
-var cEmailsSent = metric.NewCounter("sendemail.emailsSent")
+var cEmailsSent = cexp.NewCounter("sendemail.emailsSent")
 
 type Config struct {
 	SMTPAddress  string
