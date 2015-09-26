@@ -6,96 +6,78 @@ package ssdp
 import gnet "net"
 import "time"
 import "github.com/hlandau/degoutils/net"
-import "github.com/hlandau/degoutils/log"
 import "net/http"
 import "bytes"
 import "net/url"
 import "bufio"
 
-const ssdpBroadcastInterval = 60 // seconds
+// Interval at which discovery beacons are sent.
+const BroadcastInterval = 60 * time.Second
 
-func SSDPBroadcastInterval() int {
-	return ssdpBroadcastInterval
-}
-
-type SSDPEvent struct {
+// Represents a received SSDP beacon.
+type Event struct {
 	Location *url.URL
 	ST       string
 	USN      string
 }
 
-type SSDPClient interface {
-	Chan() chan SSDPEvent
-	WaitForEvent() SSDPEvent
+// SSDP event receiver.
+type Client interface {
+	// Returns a channel used to receive events.
+	Chan() <-chan Event
+
+	// Stops the receiver.
 	Stop()
 }
 
-type empty struct{}
-
-type ssdpClient struct {
-	stopChan  chan empty
-	eventChan chan SSDPEvent
+type client struct {
 	conn      *gnet.UDPConn
+	eventChan chan Event
+	stopChan  chan struct{}
 }
 
-func (self *ssdpClient) Stop() {
-	for {
-		select {
-		case self.stopChan <- empty{}:
-
-		default:
-			return
-		}
-	}
+func (c *client) Stop() {
+	close(c.stopChan)
+	close(c.eventChan)
+	c.conn.Close()
 }
 
-func (self *ssdpClient) Chan() chan SSDPEvent {
-	return self.eventChan
+func (c *client) Chan() <-chan Event {
+	return c.eventChan
 }
 
-func (self *ssdpClient) WaitForEvent() SSDPEvent {
-	return <-self.eventChan
-}
-
-func (self *ssdpClient) broadcastLoop() {
-	defer self.conn.Close()
+func (c *client) broadcastLoop() {
+	defer c.conn.Close()
 
 	ssdpAddr, err := gnet.ResolveUDPAddr("udp4", "239.255.255.250:1900")
 	if err != nil {
 		return
 	}
 
-	ticker := time.NewTicker(time.Duration(ssdpBroadcastInterval) * time.Second)
+	ticker := time.NewTicker(BroadcastInterval)
 	defer ticker.Stop()
 
-	discoBuf := bytes.NewBufferString(
+	discoBuf := []byte(
 		"M-SEARCH * HTTP/1.1\r\n" +
 			"HOST: 239.255.255.250:1900\r\n" +
 			"ST: ssdp:all\r\n" +
 			"MAN: \"ssdp:discover\"\r\n" +
-			"MX: 2\r\n\r\n").Bytes()
+			"MX: 2\r\n\r\n")
 
 	for {
-		log.Info("SSDP: Broadcasting discovery packet.")
-
-		_, err = self.conn.WriteToUDP(discoBuf, ssdpAddr)
+		c.conn.WriteToUDP(discoBuf, ssdpAddr) // ignore errors
 		select {
 		case <-ticker.C:
-
-		case <-self.stopChan:
+		case <-c.stopChan:
 			return
 		}
 	}
 }
 
-func (self *ssdpClient) handleResponse(res *http.Response) {
+func (c *client) handleResponse(res *http.Response) {
 	if res.StatusCode != 200 {
 		return
 	}
-
-	// LOCATION: ...
-	// ST: searchTarget
-	// USN: ...
 
 	st := res.Header.Get("ST")
 	if st == "" {
@@ -112,7 +94,7 @@ func (self *ssdpClient) handleResponse(res *http.Response) {
 		usn = loc.String()
 	}
 
-	ev := SSDPEvent{
+	ev := Event{
 		Location: loc,
 		ST:       st,
 		USN:      usn,
@@ -120,34 +102,27 @@ func (self *ssdpClient) handleResponse(res *http.Response) {
 
 	select {
 	// events not being waited for are simply dropped
-	case self.eventChan <- ev:
+	case c.eventChan <- ev:
 	default:
 	}
 }
 
-func (self *ssdpClient) recvLoop() {
+func (c *client) recvLoop() {
 	for {
-		buf, _, err := net.ReadDatagramFromUDP(self.conn)
+		buf, _, err := net.ReadDatagramFromUDP(c.conn)
 		if err != nil {
 			return
 		}
 
-		r := bytes.NewReader(buf)
-		rbio := bufio.NewReader(r)
+		rbio := bufio.NewReader(bytes.NewReader(buf))
 		res, err := http.ReadResponse(rbio, nil)
 		if err == nil {
-			self.handleResponse(res)
-		}
-
-		select {
-		case <-self.stopChan:
-			return
-		default:
+			c.handleResponse(res)
 		}
 	}
 }
 
-func NewClient() (SSDPClient, error) {
+func NewClient() (Client, error) {
 	conng, err := gnet.ListenPacket("udp4", ":0")
 	if err != nil {
 		return nil, err
@@ -155,14 +130,14 @@ func NewClient() (SSDPClient, error) {
 
 	conn := conng.(*gnet.UDPConn)
 
-	c := ssdpClient{
-		stopChan:  make(chan empty, 2),
-		eventChan: make(chan SSDPEvent, 10),
+	c := &client{
+		stopChan:  make(chan struct{}),
+		eventChan: make(chan Event, 10),
 		conn:      conn,
 	}
 
 	go c.broadcastLoop()
 	go c.recvLoop()
 
-	return &c, nil
+	return c, nil
 }

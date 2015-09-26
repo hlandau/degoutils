@@ -6,9 +6,10 @@ import "net/url"
 import "github.com/hlandau/degoutils/net/ssdp"
 import "github.com/hlandau/degoutils/log"
 import "time"
+import "sync"
 
 // Describes a service discovered by SSDP.
-type SSDPService struct {
+type Service struct {
 	// An URL describing the location of the service.
 	Location *url.URL
 
@@ -22,14 +23,14 @@ type SSDPService struct {
 	LastSeen time.Time
 }
 
-var client ssdp.SSDPClient
-var byUSN map[string]*SSDPService
+var once sync.Once
+var client ssdp.Client
+var byUSN = map[string]*Service{}
 
 func loop() {
-	for {
-		ev := client.WaitForEvent()
+	for ev := range client.Chan() {
 		if _, already := byUSN[ev.USN]; !already {
-			byUSN[ev.USN] = &SSDPService{USN: ev.USN}
+			byUSN[ev.USN] = &Service{USN: ev.USN}
 		}
 
 		svc := byUSN[ev.USN]
@@ -37,7 +38,7 @@ func loop() {
 		svc.Location = ev.Location
 		svc.LastSeen = time.Now()
 
-		log.Info("Registering SSDP service: ", svc)
+		//log.Info("Registering SSDP service: ", svc)
 	}
 }
 
@@ -45,20 +46,16 @@ func loop() {
 // not already started. You may call this function multiple times without
 // consequence.
 func Start() {
-	if client != nil {
-		return
-	}
+	once.Do(func() {
+		var err error
+		client, err = ssdp.NewClient()
+		log.Panice(err)
 
-	var err error
-	client, err = ssdp.NewClient()
-	log.Panice(err)
-
-	byUSN = make(map[string]*SSDPService)
-
-	go loop()
+		go loop()
+	})
 }
 
-// Obtains a list of SSDPServices matching the provided Service Type string.
+// Obtains a list of Services matching the provided Service Type string.
 //
 // Note that if you call Start() for the first time immediately prior to
 // calling this, this may return an empty list even if services are available,
@@ -67,8 +64,8 @@ func Start() {
 //
 // Services which were last seen more than three SSDP broadcast intervals ago
 // are not yielded by this function.
-func GetServicesByType(st string) (svcs []SSDPService) {
-	limit := time.Now().Add(time.Duration(ssdp.SSDPBroadcastInterval()*-3) * time.Second)
+func GetServicesByType(st string) (svcs []Service) {
+	limit := time.Now().Add(ssdp.BroadcastInterval * -3)
 	for _, v := range byUSN {
 		if v.ST == st && v.LastSeen.After(limit) {
 			svcs = append(svcs, *v)

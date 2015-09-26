@@ -75,7 +75,7 @@ func (self *xURLField) InitURLFields(base *url.URL) {
 	self.OK = true
 }
 
-func getWANIPControlURL(svc ssdpreg.SSDPService) (wurl *url.URL, err error) {
+func getWANIPControlURL(svc ssdpreg.Service) (wurl *url.URL, err error) {
 	res, err := http.Get(svc.Location.String())
 	if err != nil {
 		return
@@ -210,7 +210,7 @@ func protocolString(protocol int) string {
 	}
 }
 
-func MapPort(svc ssdpreg.SSDPService, protocol int, internalPort uint16,
+func MapPort(svc ssdpreg.Service, protocol int, internalPort uint16,
 	externalPort uint16, name string, duration time.Duration) (actualExternalPort uint16, err error) {
 	wurl, err := getWANIPControlURL(svc)
 
@@ -244,7 +244,7 @@ func MapPort(svc ssdpreg.SSDPService, protocol int, internalPort uint16,
 	return
 }
 
-func UnmapPort(svc ssdpreg.SSDPService, protocol int, externalPort uint16) (err error) {
+func UnmapPort(svc ssdpreg.Service, protocol int, externalPort uint16) (err error) {
 	wurl, err := getWANIPControlURL(svc)
 
 	protocolStr := protocolString(protocol)
@@ -276,7 +276,7 @@ type xGetExternalAddrResponse struct {
 	ExternalIPAddress string   `xml:"NewExternalIPAddress"`
 }
 
-func GetExternalAddr(svc ssdpreg.SSDPService) (ip gnet.IP, err error) {
+func GetExternalAddr(svc ssdpreg.Service) (ip gnet.IP, err error) {
 	wurl, err := getWANIPControlURL(svc)
 
 	s := `<u:GetExternalIPAddress xmlns:u="urn:schemas-upnp-org:service:WANIPConnection:1"/>`

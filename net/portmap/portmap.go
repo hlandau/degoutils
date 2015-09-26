@@ -19,14 +19,18 @@ import "github.com/hlandau/degoutils/log"
 import "github.com/hlandau/degoutils/net/ssdpreg"
 import "github.com/hlandau/degoutils/net/portmap/upnp"
 
-const ProtocolTCP = natpmpTCP // Map a TCP port.
-const ProtocolUDP = natpmpUDP // Map a UDP port.
+type Protocol int
+
+const (
+	ProtocolTCP Protocol = natpmpTCP // Map a TCP port
+	ProtocolUDP Protocol = natpmpUDP // Map a UDP port
+)
 
 type Config struct {
 	// The protocol for which the port should be mapped.
 	//
 	// Must be ProtocolTCP or ProtocolUDP.
-	Protocol int
+	Protocol Protocol
 
 	// A short description for the mapping. This may not be used in all cases.
 	//
@@ -130,96 +134,92 @@ type mapping struct {
 	prevValue    string
 }
 
-func (self *mapping) NotifyChan() <-chan struct{} {
-	self.mutex.Lock()
-	defer self.mutex.Unlock()
+func (m *mapping) NotifyChan() <-chan struct{} {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 
-	return self.notifyChan
+	return m.notifyChan
 }
 
-func (self *mapping) Delete() {
-	self.mutex.Lock()
-	defer self.mutex.Unlock()
+func (m *mapping) Delete() {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 
-	if self.aborted {
+	if m.aborted {
 		return
 	}
 
-	close(self.abortChan)
-	self.aborted = true
+	close(m.abortChan)
+	m.aborted = true
 }
 
-func (self *mapping) DeleteWait() {
-	self.Delete()
+func (m *mapping) DeleteWait() {
+	m.Delete()
 	for {
-		<-self.NotifyChan()
-		if self.GetExternalAddr() == "" {
+		<-m.NotifyChan()
+		if m.GetExternalAddr() == "" {
 			break
 		}
 	}
 }
 
-func (self *mapping) GetExternalAddr() string {
-	self.mutex.Lock()
-	defer self.mutex.Unlock()
+func (m *mapping) GetExternalAddr() string {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 
-	if !self.isActive() || self.config.ExternalPort == 0 {
+	if !m.isActive() || m.config.ExternalPort == 0 {
 		return ""
 	}
 
-	return gnet.JoinHostPort(self.externalAddr, strconv.FormatUint(uint64(self.config.ExternalPort), 10))
+	return gnet.JoinHostPort(m.externalAddr, strconv.FormatUint(uint64(m.config.ExternalPort), 10))
 }
 
-//func (self *mapping) GetConfig() MappingConfig {
-//  return self.config
-//}
-
-func (self *mapping) isActive() bool {
-	return !self.expireTime.IsZero() && self.expireTime.After(time.Now())
+func (m *mapping) isActive() bool {
+	return !m.expireTime.IsZero() && m.expireTime.After(time.Now())
 }
 
-func (self *mapping) hasFailed() bool {
-	return self.failed
+func (m *mapping) hasFailed() bool {
+	return m.failed
 }
 
 const upnpWANIPConnectionURN = "urn:schemas-upnp-org:service:WANIPConnection:1"
 const modeNATPMP = 0
 const modeUPnP = 1
 
-func (self *mapping) notify() {
-	ea := self.GetExternalAddr()
+func (m *mapping) notify() {
+	ea := m.GetExternalAddr()
 
-	self.mutex.Lock()
-	defer self.mutex.Unlock()
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 
-	if self.prevValue == ea {
+	if m.prevValue == ea {
 		// no change
 		return
 	}
 
-	self.prevValue = ea
+	m.prevValue = ea
 
-	nc := self.notifyChan
-	self.notifyChan = make(chan struct{})
+	nc := m.notifyChan
+	m.notifyChan = make(chan struct{})
 	close(nc)
 }
 
-func (self *mapping) tryNATPMPGW(gw gnet.IP, destroy bool) bool {
+func (m *mapping) tryNATPMPGW(gw gnet.IP, destroy bool) bool {
 	var externalPort uint16
 	var actualLifetime uint32
 	var err error
 
-	self.mutex.Lock()
+	m.mutex.Lock()
 	locked := true
 	defer func() {
 		if locked {
-			self.mutex.Unlock()
+			m.mutex.Unlock()
 		}
 	}()
 
-	preferredLifetime := uint32(self.config.Lifetime.Seconds())
+	preferredLifetime := uint32(m.config.Lifetime.Seconds())
 	if destroy {
-		if !self.isActive() {
+		if !m.isActive() {
 			return true
 		}
 		preferredLifetime = 0
@@ -227,34 +227,34 @@ func (self *mapping) tryNATPMPGW(gw gnet.IP, destroy bool) bool {
 
 	log.Info("Attempting to map port")
 
-	self.mutex.Unlock()
+	m.mutex.Unlock()
 	locked = false
 
 	externalPort, actualLifetime, err = natpmpMap(gw,
-		self.config.Protocol, self.config.InternalPort, self.config.ExternalPort, preferredLifetime)
+		int(m.config.Protocol), m.config.InternalPort, m.config.ExternalPort, preferredLifetime)
 
 	if err != nil {
 		log.Info(fmt.Sprintf("Port mapping failed: %+v", err))
 		return false
 	}
 
-	self.mutex.Lock()
+	m.mutex.Lock()
 	locked = true
 
 	log.Info("Mapping successful")
-	self.config.ExternalPort = externalPort
-	self.config.Lifetime = time.Duration(actualLifetime) * time.Second
+	m.config.ExternalPort = externalPort
+	m.config.Lifetime = time.Duration(actualLifetime) * time.Second
 	if preferredLifetime == 0 {
 		// we have finished tearing down the mapping by mapping it with a
 		// lifetime of zero, so return
-		//self.failed = true
+		//m.failed = true
 		return true
 	}
 
-	//self.failed = false
-	self.expireTime = time.Now().Add(time.Duration(actualLifetime) * time.Second)
+	//m.failed = false
+	m.expireTime = time.Now().Add(time.Duration(actualLifetime) * time.Second)
 
-	self.mutex.Unlock()
+	m.mutex.Unlock()
 	locked = false
 
 	// Now attempt to get the external IP.
@@ -264,45 +264,45 @@ func (self *mapping) tryNATPMPGW(gw gnet.IP, destroy bool) bool {
 		return true
 	}
 
-	self.mutex.Lock()
+	m.mutex.Lock()
 	locked = true
 
 	// update external address
-	self.externalAddr = extIP.String()
+	m.externalAddr = extIP.String()
 
 	return true
 }
 
-func (self *mapping) tryNATPMP(gwa []gnet.IP, destroy bool) bool {
+func (m *mapping) tryNATPMP(gwa []gnet.IP, destroy bool) bool {
 	for _, gw := range gwa {
-		if self.tryNATPMPGW(gw, destroy) {
+		if m.tryNATPMPGW(gw, destroy) {
 			return true
 		}
 	}
 	return false
 }
 
-func (self *mapping) tryUPnPSvc(svc ssdpreg.SSDPService, destroy bool) bool {
+func (m *mapping) tryUPnPSvc(svc ssdpreg.Service, destroy bool) bool {
 	log.Info("trying to map port via UPnP")
 
-	self.mutex.Lock()
+	m.mutex.Lock()
 	locked := true
 	defer func() {
 		if locked {
-			self.mutex.Unlock()
+			m.mutex.Unlock()
 		}
 	}()
 
-	preferredLifetime := self.config.Lifetime
+	preferredLifetime := m.config.Lifetime
 	if destroy {
-		if !self.isActive() {
+		if !m.isActive() {
 			return true
 		}
 
-		self.mutex.Unlock()
+		m.mutex.Unlock()
 		locked = false
 
-		err := upnp.UnmapPort(svc, self.config.Protocol, self.config.ExternalPort)
+		err := upnp.UnmapPort(svc, int(m.config.Protocol), m.config.ExternalPort)
 
 		if err != nil {
 			return false
@@ -310,30 +310,30 @@ func (self *mapping) tryUPnPSvc(svc ssdpreg.SSDPService, destroy bool) bool {
 		return true
 	}
 
-	self.mutex.Unlock()
+	m.mutex.Unlock()
 	locked = false
 
-	actualExternalPort, err := upnp.MapPort(svc, self.config.Protocol,
-		self.config.InternalPort,
-		self.config.ExternalPort, self.config.Name, preferredLifetime)
+	actualExternalPort, err := upnp.MapPort(svc, int(m.config.Protocol),
+		m.config.InternalPort,
+		m.config.ExternalPort, m.config.Name, preferredLifetime)
 
 	if err != nil {
 		return false
 	}
 
-	self.mutex.Lock()
+	m.mutex.Lock()
 	locked = true
 
 	preLifetime := preferredLifetime / 2
-	self.expireTime = time.Now().Add(time.Duration(preLifetime) * time.Second)
-	self.config.ExternalPort = actualExternalPort
+	m.expireTime = time.Now().Add(time.Duration(preLifetime) * time.Second)
+	m.config.ExternalPort = actualExternalPort
 
 	// Now attempt to get the external IP.
 	if destroy {
 		return true
 	}
 
-	self.mutex.Unlock()
+	m.mutex.Unlock()
 	locked = false
 
 	extIP, err := upnp.GetExternalAddr(svc)
@@ -342,34 +342,34 @@ func (self *mapping) tryUPnPSvc(svc ssdpreg.SSDPService, destroy bool) bool {
 		return true
 	}
 
-	self.mutex.Lock()
+	m.mutex.Lock()
 	locked = true
 
 	// update external address
-	self.externalAddr = extIP.String()
+	m.externalAddr = extIP.String()
 	log.Info("External address determined via UPnP: ", extIP)
 
 	return true
 }
 
-func (self *mapping) tryUPnP(svcs []ssdpreg.SSDPService, destroy bool) bool {
+func (m *mapping) tryUPnP(svcs []ssdpreg.Service, destroy bool) bool {
 	for _, svc := range svcs {
-		if self.tryUPnPSvc(svc, destroy) {
+		if m.tryUPnPSvc(svc, destroy) {
 			return true
 		}
 	}
 	return false
 }
 
-func (self *mapping) portMappingLoop(gwa []gnet.IP) {
+func (m *mapping) portMappingLoop(gwa []gnet.IP) {
 	aborting := false
 	mode := modeNATPMP
 	var ok bool
 	var d time.Duration
 	for {
-		self.mutex.Lock()
-		isActive := self.isActive()
-		self.mutex.Unlock()
+		m.mutex.Lock()
+		isActive := m.isActive()
+		m.mutex.Unlock()
 
 		if aborting && !isActive {
 			return
@@ -377,9 +377,9 @@ func (self *mapping) portMappingLoop(gwa []gnet.IP) {
 
 		switch mode {
 		case modeNATPMP:
-			ok = self.tryNATPMP(gwa, aborting)
+			ok = m.tryNATPMP(gwa, aborting)
 			if ok {
-				d = self.config.Lifetime / 2
+				d = m.config.Lifetime / 2
 			} else {
 				svc := ssdpreg.GetServicesByType(upnpWANIPConnectionURN)
 				if len(svc) > 0 {
@@ -400,65 +400,65 @@ func (self *mapping) portMappingLoop(gwa []gnet.IP) {
 				continue
 			}
 
-			ok = self.tryUPnP(svcs, aborting)
+			ok = m.tryUPnP(svcs, aborting)
 			d = time.Duration(1) * time.Hour
 		}
 
 		if aborting {
-			self.mutex.Lock()
-			isActive = self.isActive()
-			self.mutex.Unlock()
+			m.mutex.Lock()
+			isActive = m.isActive()
+			m.mutex.Unlock()
 			if isActive {
 				if ok {
-					self.mutex.Lock()
-					self.expireTime = time.Time{}
-					self.mutex.Unlock()
+					m.mutex.Lock()
+					m.expireTime = time.Time{}
+					m.mutex.Unlock()
 				} else {
-					//self.mutex.Lock()
-					//et := self.expireTime
-					//self.mutex.Unlock()
+					//m.mutex.Lock()
+					//et := m.expireTime
+					//m.mutex.Unlock()
 					//time.Sleep(et.Sub(time.Now()))
 				}
 			}
 			if !isActive || ok {
-				self.notify()
+				m.notify()
 				return
 			}
 		}
 
-		self.mutex.Lock()
-		self.failed = !ok
-		self.mutex.Unlock()
+		m.mutex.Lock()
+		m.failed = !ok
+		m.mutex.Unlock()
 
 		if ok {
 			log.Info("fwneg succeeded")
-			self.notify()
-			self.config.Backoff.Reset()
+			m.notify()
+			m.config.Backoff.Reset()
 			select {
-			case <-self.abortChan:
+			case <-m.abortChan:
 				aborting = true
 
 			case <-time.After(d):
 			}
 		} else {
 			// failed, do retry delay
-			d := self.config.Backoff.NextDelay()
+			d := m.config.Backoff.NextDelay()
 			if d == 0 {
 				// max tries occurred
 				if aborting {
 					// if aborting, force !active and notify when we give up
-					self.mutex.Lock()
-					self.expireTime = time.Time{}
-					self.mutex.Unlock()
-					self.notify()
+					m.mutex.Lock()
+					m.expireTime = time.Time{}
+					m.mutex.Unlock()
+					m.notify()
 				}
 				return
 			}
 
 			ta := time.After(d)
-			self.notify()
+			m.notify()
 			select {
-			case <-self.abortChan:
+			case <-m.abortChan:
 				aborting = true
 
 			case <-ta:
@@ -483,8 +483,8 @@ func New(config Config) (m Mapping, err error) {
 		return
 	}
 
-	if config.Lifetime == time.Duration(0) {
-		config.Lifetime = time.Duration(2) * time.Hour
+	if config.Lifetime == 0 {
+		config.Lifetime = 2 * time.Hour
 	}
 
 	mm := &mapping{
