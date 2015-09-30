@@ -5,7 +5,6 @@ import "errors"
 import "fmt"
 import "time"
 import "github.com/hlandau/degoutils/net"
-import "github.com/hlandau/degoutils/log"
 import "bytes"
 import "encoding/binary"
 
@@ -45,7 +44,7 @@ func natpmpMakeRequest(dst gnet.IP, opcode byte, data []byte) (r []byte, err err
 			break
 		}
 
-		err = conn.SetDeadline(time.Now().Add(time.Duration(maxtime) * time.Millisecond))
+		err = conn.SetDeadline(time.Now().Add(maxtime))
 		if err != nil {
 			return
 		}
@@ -53,7 +52,6 @@ func natpmpMakeRequest(dst gnet.IP, opcode byte, data []byte) (r []byte, err err
 		var n int
 		n, err = conn.Write(msg)
 		if err != nil {
-			log.Info(fmt.Sprintf("couldn't write NAT-PMP packet: %+v", err))
 			return
 		}
 
@@ -69,7 +67,6 @@ func natpmpMakeRequest(dst gnet.IP, opcode byte, data []byte) (r []byte, err err
 			if err.(gnet.Error).Timeout() {
 				continue
 			}
-			//log.Info(fmt.Sprintf("couldn't read NAT-PMP packet: %+v", err))
 			return
 		}
 
@@ -118,7 +115,7 @@ const opcMapTCP = 1
 const opcMapUDP = 2
 
 func natpmpMap(gwaddr gnet.IP, protoNum int,
-	internalPort, suggestedExternalPort uint16, lifetime uint32) (externalPort uint16, actualLifetime uint32, err error) {
+	internalPort, suggestedExternalPort uint16, lifetime time.Duration) (externalPort uint16, actualLifetime time.Duration, err error) {
 	var opc byte
 	if protoNum == natpmpTCP {
 		opc = opcMapTCP
@@ -133,7 +130,7 @@ func natpmpMap(gwaddr gnet.IP, protoNum int,
 	binary.Write(b, binary.BigEndian, uint16(0))
 	binary.Write(b, binary.BigEndian, uint16(internalPort))
 	binary.Write(b, binary.BigEndian, uint16(suggestedExternalPort))
-	binary.Write(b, binary.BigEndian, uint32(lifetime))
+	binary.Write(b, binary.BigEndian, uint32(lifetime.Seconds()))
 
 	r, err := natpmpMakeRequest(gwaddr, opc, b.Bytes())
 	if err != nil {
@@ -150,7 +147,7 @@ func natpmpMap(gwaddr gnet.IP, protoNum int,
 	// r[6: 8] // mapped external port
 	// r[8:12] // lifetime
 	externalPort = binary.BigEndian.Uint16(r[6:8])
-	actualLifetime = binary.BigEndian.Uint32(r[8:12])
+	actualLifetime = time.Duration(binary.BigEndian.Uint32(r[8:12])) * time.Second
 
 	return
 }

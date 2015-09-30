@@ -11,11 +11,9 @@ package portmap
 
 import gnet "net"
 import "time"
-import "fmt"
 import "sync"
 import "strconv"
 import "github.com/hlandau/degoutils/net"
-import "github.com/hlandau/degoutils/log"
 import "github.com/hlandau/degoutils/net/ssdpreg"
 import "github.com/hlandau/degoutils/net/portmap/upnp"
 
@@ -183,8 +181,13 @@ func (m *mapping) hasFailed() bool {
 }
 
 const upnpWANIPConnectionURN = "urn:schemas-upnp-org:service:WANIPConnection:1"
-const modeNATPMP = 0
-const modeUPnP = 1
+
+type mode int
+
+const (
+	modeNATPMP mode = iota
+	modeUPnP
+)
 
 func (m *mapping) notify() {
 	ea := m.GetExternalAddr()
@@ -206,7 +209,7 @@ func (m *mapping) notify() {
 
 func (m *mapping) tryNATPMPGW(gw gnet.IP, destroy bool) bool {
 	var externalPort uint16
-	var actualLifetime uint32
+	var actualLifetime time.Duration
 	var err error
 
 	m.mutex.Lock()
@@ -217,15 +220,13 @@ func (m *mapping) tryNATPMPGW(gw gnet.IP, destroy bool) bool {
 		}
 	}()
 
-	preferredLifetime := uint32(m.config.Lifetime.Seconds())
+	preferredLifetime := m.config.Lifetime
 	if destroy {
 		if !m.isActive() {
 			return true
 		}
 		preferredLifetime = 0
 	}
-
-	log.Info("Attempting to map port")
 
 	m.mutex.Unlock()
 	locked = false
@@ -234,14 +235,12 @@ func (m *mapping) tryNATPMPGW(gw gnet.IP, destroy bool) bool {
 		int(m.config.Protocol), m.config.InternalPort, m.config.ExternalPort, preferredLifetime)
 
 	if err != nil {
-		log.Info(fmt.Sprintf("Port mapping failed: %+v", err))
 		return false
 	}
 
 	m.mutex.Lock()
 	locked = true
 
-	log.Info("Mapping successful")
 	m.config.ExternalPort = externalPort
 	m.config.Lifetime = time.Duration(actualLifetime) * time.Second
 	if preferredLifetime == 0 {
@@ -283,8 +282,6 @@ func (m *mapping) tryNATPMP(gwa []gnet.IP, destroy bool) bool {
 }
 
 func (m *mapping) tryUPnPSvc(svc ssdpreg.Service, destroy bool) bool {
-	log.Info("trying to map port via UPnP")
-
 	m.mutex.Lock()
 	locked := true
 	defer func() {
@@ -347,7 +344,6 @@ func (m *mapping) tryUPnPSvc(svc ssdpreg.Service, destroy bool) bool {
 
 	// update external address
 	m.externalAddr = extIP.String()
-	log.Info("External address determined via UPnP: ", extIP)
 
 	return true
 }
@@ -384,24 +380,20 @@ func (m *mapping) portMappingLoop(gwa []gnet.IP) {
 				svc := ssdpreg.GetServicesByType(upnpWANIPConnectionURN)
 				if len(svc) > 0 {
 					// NAT-PMP failed and UPnP is available, so switch to it
-					log.Info("switching to UPnP")
 					mode = modeUPnP
 					continue
-				} else {
-					log.Info("no UPnP services")
 				}
 			}
 
 		case modeUPnP:
 			svcs := ssdpreg.GetServicesByType(upnpWANIPConnectionURN)
 			if len(svcs) == 0 {
-				log.Info("switching to NAT-PMP")
 				mode = modeNATPMP
 				continue
 			}
 
 			ok = m.tryUPnP(svcs, aborting)
-			d = time.Duration(1) * time.Hour
+			d = 1 * time.Hour
 		}
 
 		if aborting {
@@ -431,15 +423,7 @@ func (m *mapping) portMappingLoop(gwa []gnet.IP) {
 		m.mutex.Unlock()
 
 		if ok {
-			log.Info("fwneg succeeded")
-			m.notify()
 			m.config.Backoff.Reset()
-			select {
-			case <-m.abortChan:
-				aborting = true
-
-			case <-time.After(d):
-			}
 		} else {
 			// failed, do retry delay
 			d := m.config.Backoff.NextDelay()
@@ -455,17 +439,21 @@ func (m *mapping) portMappingLoop(gwa []gnet.IP) {
 				return
 			}
 
-			ta := time.After(d)
-			m.notify()
-			select {
-			case <-m.abortChan:
-				aborting = true
-
-			case <-ta:
-			}
 		}
+
+		m.notify()
+
+		select {
+		case <-m.abortChan:
+			aborting = true
+
+		case <-time.After(d):
+		}
+
 	}
 }
+
+const DefaultLifetime = 2 * time.Hour
 
 // Creates a port mapping. The mapping process is continually attempted and
 // maintained in the background, but the Mapping interface is returned
@@ -477,17 +465,17 @@ func (m *mapping) portMappingLoop(gwa []gnet.IP) {
 // A successful mapping is by no means guaranteed.
 //
 // See the MappingConfig struct and the Mapping interface for more information.
-func New(config Config) (m Mapping, err error) {
+func New(config Config) (Mapping, error) {
 	gwa, err := net.GetGatewayAddrs()
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	if config.Lifetime == 0 {
-		config.Lifetime = 2 * time.Hour
+		config.Lifetime = DefaultLifetime
 	}
 
-	mm := &mapping{
+	m := &mapping{
 		config:     config,
 		abortChan:  make(chan struct{}),
 		notifyChan: make(chan struct{}),
@@ -495,7 +483,6 @@ func New(config Config) (m Mapping, err error) {
 
 	ssdpreg.Start()
 
-	go mm.portMappingLoop(gwa)
-	m = mm
-	return
+	go m.portMappingLoop(gwa)
+	return m, nil
 }
