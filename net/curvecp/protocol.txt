@@ -1,0 +1,33 @@
+Runs over a reliable ordered bidirectional point-to-point datagram stream.
+
+Frame format:
+   1  ui  Opcode
+   ....   Opcode-specific data
+
+Opcodes:
+  ClientHello (0x00)
+    4  ui  Magic (0xB673B08D)
+    2  ui  Protocol Major Version (0)
+    2  ui  Reserved (0/ignore)
+   32      Client Transient Public Key (curveCt)
+   24      Initial Client Nonce Nc
+   16+     Box (contents ignored, empty) <take Nc> (Ct->S)
+  ServerHello (0x01)
+    4  ui  Magic (0x42D19719)
+   24      Initial Server Nonce Ns
+   48     Box [St] <take Ns> (S->Ct)
+  ClientCommence (0x02)
+  144     Box (C + vouch + metadata) <take Nc> (Ct->St)
+            where vouch :=
+              80  Box (Ct + S) <take Nc> (C->St)
+
+          (Inner Nc is taken first)
+  Message (0x03)
+   17+     Box (payload) <take Nc or take Ns> (St->Ct) or (Ct->St)
+             where payload :=
+               1  ui  Reserved (0)
+               ...    Data
+
+"Take Nx" means take the initial nonce given and XOR it with the
+associated 64-bit unsigned counter. If a counter wraps around to 0, the
+connection is aborted.

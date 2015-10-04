@@ -39,6 +39,11 @@ type FrameReadWriter interface {
 	FrameWriter
 }
 
+type FrameReadWriterCloser interface {
+	FrameReadWriter
+	Close() error
+}
+
 // Bidirectional BSDA message stream.
 type Stream struct {
 	// The maximum frame size which may be received. An error is returned
@@ -164,4 +169,11 @@ func (s *Stream) WriteFrame(buf []byte) error {
 // Defaults to 32ki.
 func (s *Stream) SetMaxReadSize(sz int) {
 	atomic.StoreUint32(&s.maxRxFrameSize, uint32(sz))
+}
+
+func (s *Stream) Close() error {
+	if c, ok := s.writer.(io.Closer); ok {
+		return c.Close()
+	}
+	return nil
 }
