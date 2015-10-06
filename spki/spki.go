@@ -31,7 +31,11 @@ package spki
 import "fmt"
 import "github.com/hlandau/sx"
 import "github.com/agl/ed25519/edwards25519"
+import "golang.org/x/crypto/openpgp/armor"
 import "crypto/sha512"
+import "io"
+import "io/ioutil"
+import "bytes"
 
 // Rederive an Ed25519 public key from a private key.
 func Ed25519RederivePublic(privateKey *[64]byte) (publicKey *[32]byte) {
@@ -115,4 +119,59 @@ func LoadEd25519Key(v []interface{}, privateKey *[64]byte) (isPrivate bool, err 
 	}
 
 	return
+}
+
+// Returns a reader which reads either the contents of an OpenPGP-armored file,
+// or, if OpenPGP armor is not found, the file itself. If checkFunc is
+// specified and OpenPGP armor is found, it is called with the block. Any
+// errors returned from checkFunc short circuit and are returned.
+func Dearmor(r io.Reader, checkFunc func(blk *armor.Block) error) (io.Reader, error) {
+	abody, err := ioutil.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
+
+	body := abody
+	blk, err := armor.Decode(bytes.NewReader(abody))
+	if err == nil {
+		if checkFunc != nil {
+			err = checkFunc(blk)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		body, err = ioutil.ReadAll(blk.Body)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return bytes.NewReader(body), nil
+}
+
+// Load a keyfile. The file can contain either an OpenPGP-armored file or an
+// unarmored S-expression.
+func LoadKeyFile(r io.Reader, privateKey *[64]byte) (isPrivate bool, err error) {
+	rr, err := Dearmor(r, func(blk *armor.Block) error {
+		if blk.Type != "SPKI PRIVATE KEY" && blk.Type != "SPKI PUBLIC KEY" {
+			return fmt.Errorf("wrong armor tag")
+		}
+		return nil
+	})
+	if err != nil {
+		return false, err
+	}
+
+	body, err := ioutil.ReadAll(rr)
+	if err != nil {
+		return false, err
+	}
+
+	v, err := sx.SX.Parse(body)
+	if err != nil {
+		return false, err
+	}
+
+	return LoadEd25519Key(v, privateKey)
 }
