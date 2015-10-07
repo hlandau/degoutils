@@ -2,10 +2,7 @@ package connect
 
 import "strings"
 import "strconv"
-import "errors"
 import "fmt"
-
-//import "github.com/hlandau/degoutils/log"
 import "io"
 
 const (
@@ -29,7 +26,7 @@ type cmdsApp struct {
 type cmdsInfo map[string]cmdsApp
 
 func eBadCmds(s string) error {
-	return errors.New(fmt.Sprintf("badly formatted cmds at \"%s\"", s))
+	return fmt.Errorf("badly formatted cmds at %#v", s)
 }
 
 func parseAppName(s string) (v, rest string, err error) {
@@ -209,21 +206,16 @@ func parseMethod(s string) (method cmdsMethod, rest string, err error) {
 
 	if method.methodType == cmdsMT_CONN {
 		switch method.implicitMethodName {
-		case "":
-		case "tls":
-		case "zmq":
-
+		case "", "tls", "zmq":
 		default:
-			err = errors.New(fmt.Sprintf("Unsupported implicit method name in method descriptor: %+v", method))
+			err = fmt.Errorf("Unsupported implicit method name in method descriptor: %+v", method)
 			return
 		}
 
 		switch method.explicitMethodName {
-		case "tcp":
-		case "udp":
-
+		case "tcp", "udp":
 		default:
-			err = errors.New(fmt.Sprintf("Unsupported explicit method name in method descriptor: %+v", method))
+			err = fmt.Errorf("Unsupported explicit method name in method descriptor: %+v", method)
 			return
 		}
 	}
@@ -268,7 +260,6 @@ func parseCmds(s string) (info cmdsInfo, err error) {
 		if appName, app, s, err = parseApp(s); err != nil && err != io.EOF {
 			break
 		}
-		//log.Info(fmt.Sprintf("CMDS: %s: %+v", appName, app))
 		info[appName] = app
 	}
 

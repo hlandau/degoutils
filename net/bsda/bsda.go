@@ -55,6 +55,8 @@ type Stream struct {
 	reader      io.Reader
 	writer      io.Writer
 	oversizeLen uint32
+
+	wbuf []byte
 }
 
 var ErrOversizeFrame = fmt.Errorf("received frame in excess of permitted size")
@@ -83,12 +85,15 @@ func create(reader io.Reader, writer io.Writer) *Stream {
 		reader:         reader,
 		writer:         writer,
 		maxRxFrameSize: 32 * 1024,
+		wbuf:           make([]byte, headerSize, 256),
 	}
 
 	return s
 }
 
 var scratch [8192]byte
+
+const headerSize = 4
 
 // Read a single frame. Underlying I/O errors are passed through.
 //
@@ -118,7 +123,7 @@ func (s *Stream) ReadFrame() ([]byte, error) {
 	}
 
 	// Read the frame header.
-	var header [4]byte
+	var header [headerSize]byte
 	_, err := io.ReadFull(s.reader, header[:])
 	if err != nil {
 		return nil, err
@@ -152,15 +157,10 @@ func (s *Stream) WriteFrame(buf []byte) error {
 	s.writeMutex.Lock()
 	defer s.writeMutex.Unlock()
 
-	var header [4]byte
-	binary.LittleEndian.PutUint32(header[:], uint32(len(buf)))
+	s.wbuf = append(s.wbuf[0:headerSize], buf...)
+	binary.LittleEndian.PutUint32(s.wbuf[0:headerSize], uint32(len(buf)))
 
-	_, err := s.writer.Write(header[:])
-	if err != nil {
-		return err
-	}
-
-	_, err = s.writer.Write(buf)
+	_, err := s.writer.Write(s.wbuf)
 	return err
 }
 
@@ -171,6 +171,8 @@ func (s *Stream) SetMaxReadSize(sz int) {
 	atomic.StoreUint32(&s.maxRxFrameSize, uint32(sz))
 }
 
+// Close the stream. If the underlying writer supports the io.Closer interface,
+// it is closed as well.
 func (s *Stream) Close() error {
 	if c, ok := s.writer.(io.Closer); ok {
 		return c.Close()
