@@ -175,6 +175,13 @@ type Config struct {
 	//     If not set, a zero value will be used.
 	//     If ServerName is not set, a default will be used.
 	//
+	//   "curvecp": *curvecp.Config.
+	//     If client private key is not set, a random one will be generated.
+	//     Server key must be set in config or failing that, in URL.
+	//
+	//   "ws-headers": http.Header.
+	//     Websocket request headers.
+	//
 	Pragma map[string]interface{}
 }
 
