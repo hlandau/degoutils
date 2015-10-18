@@ -11,15 +11,42 @@ import "os"
 import "os/exec"
 import "net"
 import "gopkg.in/hlandau/easymetric.v1/cexp"
+import "gopkg.in/hlandau/easyconfig.v1/cflag"
+import "path/filepath"
+import "github.com/hlandau/xlog"
+import "sync"
 
 var cEmailsSent = cexp.NewCounter("sendemail.emailsSent")
 
-type Config struct {
-	SMTPAddress  string
-	SMTPUsername string
-	SMTPPassword string
+var log, Log = xlog.New("sendemail")
 
-	SendmailPath string
+var (
+	fg               = cflag.NewGroup(nil, "sendemail")
+	smtpAddressFlag  = cflag.String(fg, "smtpaddress", "", "SMTP address (hostname[:port])")
+	smtpUsernameFlag = cflag.String(fg, "smtpusername", "", "SMTP username")
+	smtpPasswordFlag = cflag.String(fg, "smtppassword", "", "SMTP password")
+	sendmailPathFlag = cflag.String(fg, "sendmailpath", "", "path to /usr/sbin/sendmail")
+	numSendersFlag   = cflag.Int(fg, "numsenders", 2, "number of asynchronous e. mail senders")
+	fromFlag         = cflag.String(fg, "from", "nobody@localhost", "Default from address")
+)
+
+var sendChan = make(chan *Email, 32)
+var startOnce sync.Once
+
+func sendLoop() {
+	for e := range sendChan {
+		err := Send(e)
+		log.Errore(err, "cannot send e. mail")
+	}
+}
+
+func startSenders() {
+	startOnce.Do(func() {
+		numSenders := numSendersFlag.Value()
+		for i := 0; i < numSenders; i++ {
+			go sendLoop()
+		}
+	})
 }
 
 type Email struct {
@@ -32,13 +59,19 @@ type Email struct {
 	rfc822Message []byte
 }
 
-type Sender interface {
-	SendEmail(e *Email) error
+func SendAsync(e *Email) {
+	startSenders()
+	sendChan <- e
 }
 
-func (cfg *Config) SendEmail(e *Email) error {
+func Send(e *Email) error {
 	if len(e.From) == 0 {
-		return fmt.Errorf("from address must be specified")
+		v := fromFlag.Value()
+		if _, err := mail.ParseAddress(v); err != nil {
+			return fmt.Errorf("no from address specified and default from address is not valid")
+		}
+
+		e.From = v
 	}
 
 	if len(e.To) == 0 {
@@ -68,12 +101,54 @@ func (cfg *Config) SendEmail(e *Email) error {
 	e.rfc822Message = append(e.rfc822Message, e.Body...)
 
 	cEmailsSent.Add(1)
+	return send(e)
+}
 
-	if cfg.SMTPAddress != "" {
-		return cfg.sendViaSMTP(e)
+func send(e *Email) error {
+	if smtpAddressFlag.Value() != "" {
+		return sendViaSMTP(e)
 	}
 
-	return cfg.sendViaSendmail(e)
+	autodetectSendmail()
+
+	return sendViaSendmail(e)
+}
+
+var triedAutodetection = false
+
+var guessPaths = []string{
+	"/usr/sbin/sendmail",
+}
+
+func autodetectSendmail() {
+	defer func() {
+		triedAutodetection = true
+	}()
+
+	if triedAutodetection || sendmailPathFlag.Value() != "" {
+		return
+	}
+
+	p, err := exec.LookPath("sendmail")
+	if err == nil {
+		p2, err := filepath.Abs(p)
+		if err == nil {
+			p = p2
+		}
+
+		sendmailPathFlag.SetValue(p)
+		return
+	}
+
+	for _, p := range guessPaths {
+		_, err := os.Stat(p)
+		if err != nil {
+			continue
+		}
+
+		sendmailPathFlag.SetValue(p)
+		return
+	}
 }
 
 func serializeHeaders(headers mail.Header) (b []byte) {
@@ -134,28 +209,28 @@ func encryptEmail(e *Email) error {
 	return nil
 }
 
-func (cfg *Config) sendViaSMTP(e *Email) error {
+func sendViaSMTP(e *Email) error {
 	var auth smtp.Auth
 
-	if cfg.SMTPUsername != "" {
-		host, _, err := net.SplitHostPort(cfg.SMTPAddress)
+	if smtpUsernameFlag.Value() != "" {
+		host, _, err := net.SplitHostPort(smtpAddressFlag.Value())
 		if err != nil {
 			return err
 		}
 
-		auth = smtp.PlainAuth("", cfg.SMTPUsername, cfg.SMTPPassword, host)
+		auth = smtp.PlainAuth("", smtpUsernameFlag.Value(), smtpPasswordFlag.Value(), host)
 	}
 
-	return smtp.SendMail(cfg.SMTPAddress, auth, e.From, e.To, e.rfc822Message)
+	return smtp.SendMail(smtpAddressFlag.Value(), auth, e.From, e.To, e.rfc822Message)
 }
 
-func (cfg *Config) sendViaSendmail(e *Email) error {
+func sendViaSendmail(e *Email) error {
 	smargs := []string{"-i"}
 	smargs = append(smargs, e.To...)
 
-	spath := cfg.SendmailPath
+	spath := sendmailPathFlag.Value()
 	if spath == "" {
-		spath = "/usr/sbin/sendmail"
+		return fmt.Errorf("neither SMTP nor sendmail configured, and sendmail cannot be detected")
 	}
 
 	sm := exec.Command(spath, smargs...)

@@ -6,29 +6,42 @@ import "net"
 import "net/http"
 import "github.com/gorilla/websocket"
 
-type wsFrameAdaptor struct {
+type WSFrameAdaptor struct {
 	ws  *websocket.Conn
+	req *http.Request
 	res *http.Response
 }
 
-func (a *wsFrameAdaptor) ReadFrame() ([]byte, error) {
+func NewWSFrameAdaptor(ws *websocket.Conn, req *http.Request, res *http.Response) *WSFrameAdaptor {
+	return &WSFrameAdaptor{
+		ws:  ws,
+		req: req,
+		res: res,
+	}
+}
+
+func (a *WSFrameAdaptor) ReadFrame() ([]byte, error) {
 	_, b, err := a.ws.ReadMessage()
 	return b, err
 }
 
-func (a *wsFrameAdaptor) WriteFrame(b []byte) error {
+func (a *WSFrameAdaptor) WriteFrame(b []byte) error {
 	return a.ws.WriteMessage(websocket.BinaryMessage, b)
 }
 
-func (a *wsFrameAdaptor) Close() error {
+func (a *WSFrameAdaptor) Close() error {
 	return a.ws.Close()
 }
 
-func (a *wsFrameAdaptor) WSHTTPResponse() *http.Response {
+func (a *WSFrameAdaptor) WSHTTPRequest() *http.Request {
+	return a.req
+}
+
+func (a *WSFrameAdaptor) WSHTTPResponse() *http.Response {
 	return a.res
 }
 
-func (a *wsFrameAdaptor) WSUnderlying() *websocket.Conn {
+func (a *WSFrameAdaptor) WSUnderlying() *websocket.Conn {
 	return a.ws
 }
 
@@ -48,10 +61,7 @@ func wrapWS(c io.Closer, info *MethodInfo) (io.Closer, error) {
 		return nil, err
 	}
 
-	return &wsFrameAdaptor{
-		ws:  conn,
-		res: res,
-	}, nil
+	return NewWSFrameAdaptor(conn, nil, res), nil
 }
 
 func init() {

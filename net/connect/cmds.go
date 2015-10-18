@@ -14,7 +14,7 @@ type cmdsMethod struct {
 	methodType         int
 	name               string
 	port               int
-	implicitMethodName string
+	implicitMethodName []string
 	explicitMethodName string
 }
 
@@ -162,16 +162,11 @@ func parseMethodInner(s string) (method cmdsMethod, rest string, err error) {
 		var mn string
 		switch rest[0] {
 		case '$':
-			if method.implicitMethodName != "" {
-				err = eBadCmds(rest)
-				return
-			}
-
 			if mn, rest, err = readXAlphaUntil(rest[1:], " +$;"); err != nil && err != io.EOF {
 				return
 			}
 
-			method.implicitMethodName = mn
+			method.implicitMethodName = append(method.implicitMethodName, mn)
 
 		case '+':
 			if method.explicitMethodName != "" {
@@ -202,22 +197,6 @@ func parseMethod(s string) (method cmdsMethod, rest string, err error) {
 	method, rest, err = parseMethodInner(s)
 	if err != nil && err != io.EOF {
 		return
-	}
-
-	if method.methodType == cmdsMT_CONN {
-		switch method.implicitMethodName {
-		case "", "tls", "zmq":
-		default:
-			err = fmt.Errorf("Unsupported implicit method name in method descriptor: %+v", method)
-			return
-		}
-
-		switch method.explicitMethodName {
-		case "tcp", "udp":
-		default:
-			err = fmt.Errorf("Unsupported explicit method name in method descriptor: %+v", method)
-			return
-		}
 	}
 
 	return

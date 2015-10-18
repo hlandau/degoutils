@@ -364,11 +364,13 @@ func (c *connector) connectDial(m cmdsMethod, host, port string) (io.Closer, err
 		return nil, err
 	}
 
-	if m.implicitMethodName != "" {
-		f := implicitMethodRegistry[m.implicitMethodName]
+	// go backwards so the syntax order is more logical
+	for i := len(m.implicitMethodName) - 1; i >= 0; i-- {
+		implicitMethodName := m.implicitMethodName[i]
+		f := implicitMethodRegistry[implicitMethodName]
 		if f == nil {
 			conn.Close()
-			return nil, errors.New("unknown implicit method")
+			return nil, fmt.Errorf("unknown implicit method %#v", implicitMethodName)
 		}
 
 		conn2, err := f(conn, mi)
