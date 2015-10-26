@@ -15,6 +15,10 @@ import "gopkg.in/hlandau/easyconfig.v1/cflag"
 import "path/filepath"
 import "github.com/hlandau/xlog"
 import "sync"
+import "io"
+import "gopkg.in/alexcesaro/quotedprintable.v3"
+import "mime/multipart"
+import "net/textproto"
 
 var cEmailsSent = cexp.NewCounter("sendemail.emailsSent")
 
@@ -56,6 +60,15 @@ type Email struct {
 	Body             string
 	OpenPGPEncryptTo []string
 
+	// If Body is "", a message is assembled as follows:
+	//
+	//                   TextBody not set  TextBody set
+	// HTMLBody not set  Empty message     Non-MIME text message
+	// HTMLBody set      MIME HTML-only    MIME HTML & text message
+	//
+	HTMLBody string
+	TextBody string
+
 	rfc822Message []byte
 }
 
@@ -90,7 +103,12 @@ func Send(e *Email) error {
 		e.Headers["To"] = e.To
 	}
 
-	err := encryptEmail(e)
+	err := e.assembleMIME()
+	if err != nil {
+		return err
+	}
+
+	err = encryptEmail(e)
 	if err != nil {
 		return err
 	}
@@ -255,4 +273,46 @@ func sendViaSendmail(e *Email) error {
 	}
 
 	return nil
+}
+
+func (e *Email) assembleMIME() error {
+	if e.Body != "" || (e.TextBody == "" && e.HTMLBody == "") {
+		return nil
+	}
+
+	if e.TextBody != "" && e.HTMLBody == "" {
+		e.Body = e.TextBody
+		return nil
+	}
+
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+
+	appendPart(w, func(h textproto.MIMEHeader) {
+		h.Set("Content-Type", "text/plain; charset=utf-8")
+	}, e.TextBody)
+
+	appendPart(w, func(h textproto.MIMEHeader) {
+		h.Set("Content-Type", "text/html; charset=utf-8")
+	}, e.HTMLBody)
+
+	e.Headers["MIME-Version"] = []string{"1.0"}
+	e.Headers["Content-Type"] = []string{"multipart/alternative; boundary=" + w.Boundary()}
+	e.Body = string(buf.Bytes())
+	return nil
+}
+
+func appendPart(w *multipart.Writer, headers func(h textproto.MIMEHeader), body string) {
+	if body == "" {
+		return
+	}
+
+	h := textproto.MIMEHeader{}
+	h.Set("Content-Transfer-Encoding", "quoted-printable")
+	headers(h)
+	partW, err := w.CreatePart(h)
+	log.Panice(err, "create MIME part")
+	quoW := quotedprintable.NewWriter(partW)
+	defer quoW.Close()
+	io.WriteString(quoW, body)
 }

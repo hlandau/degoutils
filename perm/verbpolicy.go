@@ -22,7 +22,9 @@ type VerbPolicy struct {
 // If an object is given and supports the Ownable interface, and it nominates
 // an owner ID, and the verb requires ownership, returns true if the
 // "user-id:OWNER-ID(1)" condition is met, where OWNER-ID is the string
-// representation of the owner ID.
+// representation of the owner ID. (The idea is that you axiomatically assign
+// every user the permission "user-id:USER-ID(1)", where USER-ID is their user
+// ID.)
 //
 // obj may be nil, in which case owner-based checks fail.
 func (p *VerbPolicy) AllowsVerbObj(verb string, ps PermissionSet, obj interface{}) bool {
