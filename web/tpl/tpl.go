@@ -74,7 +74,7 @@ var ErrNotFound = fmt.Errorf("tpl not found")
 
 func Show(req *http.Request, name string, args map[string]interface{}) {
 	err := TryShow(req, name, args)
-	log.Panice(err, "cannot render template")
+	log.Panice(err, "cannot render template ", name)
 }
 
 var GetContextFunc func(req *http.Request) interface{}

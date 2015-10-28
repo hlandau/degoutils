@@ -26,6 +26,7 @@ import "github.com/hlandau/degoutils/web/session/storage"
 import "github.com/hlandau/degoutils/web/session/storage/memorysession"
 import "github.com/hlandau/degoutils/web/session/storage/redissession"
 import "github.com/hlandau/degoutils/web/assetmgr"
+import "github.com/hlandau/degoutils/web/cspreport"
 import "github.com/llgcode/draw2d"
 
 var log, Log = xlog.New("web")
@@ -36,6 +37,8 @@ var bindFlag = cflag.String(nil, "bind", ":3400", "HTTP binding address")
 var redisAddressFlag = cflag.String(nil, "redisaddress", "localhost:6379", "Redis address")
 var redisPasswordFlag = cflag.String(nil, "redispassword", "", "Redis password")
 var redisPrefixFlag = cflag.String(nil, "redisprefix", "", "Redis prefix")
+var captchaFontPathFlag = cflag.String(nil, "captchafontpath", "", "Path to CAPTCHA font directory")
+var reportURI = cflag.String(nil, "reporturi", "/.csp-report", "CSP/PKP report URI")
 
 type Config struct {
 	SessionConfig *session.Config
@@ -54,10 +57,19 @@ type Config struct {
 	AssetMgr      *assetmgr.Manager
 }
 
+func (cfg *Config) GetCAPTCHA() *captcha.Config {
+	return cfg.CAPTCHA
+}
+
 var ServerKey int
 
 func (cfg *Config) Handler(h http.Handler) http.Handler {
 	cfg.mustInit()
+
+	csp := "default-src 'self' https://www.google-analytics.com; frame-ancestors 'none'; img-src 'self' https://www.google-analytics.com data:; form-action 'self'; plugin-types;"
+	if reportURI.Value() != "" {
+		csp += fmt.Sprintf(" report-uri %s;", reportURI.Value())
+	}
 
 	var h2 http.Handler = http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		cRequestsHandled.Inc()
@@ -69,7 +81,7 @@ func (cfg *Config) Handler(h http.Handler) http.Handler {
 		hdr.Set("X-Frame-Options", "DENY")
 		hdr.Set("X-Content-Type-Options", "nosniff")
 		hdr.Set("X-UA-Compatible", "ie=edge")
-		hdr.Set("Content-Security-Policy", "default-src 'self' https://www.google-analytics.com; frame-ancestors 'none'; img-src 'self' https://www.google-analytics.com data:; form-action 'self'")
+		hdr.Set("Content-Security-Policy", csp)
 		if origin.IsSSL(req) {
 			hdr.Set("Strict-Transport-Security", "max-age=15552000")
 		}
@@ -91,20 +103,23 @@ func (cfg *Config) Handler(h http.Handler) http.Handler {
 		h2 = cfg.SessionConfig.InitHandler(h2)
 	}
 
-	h2 = errorhandler.Handler(h2)
-
 	if cfg.CAPTCHA == nil {
 		cfg.CAPTCHA = &captcha.Config{
 			DisallowHandlerNew: true,
 			Leeway:             1,
 		}
+
+		if captchaFontPathFlag.Value() != "" {
+			cfg.CAPTCHA.SetFontPath(captchaFontPathFlag.Value())
+		}
 	}
 
 	mux := http.NewServeMux()
 	mux.Handle("/", h2)
-	mux.Handle("/captcha/", cfg.CAPTCHA.Handler("/captcha/"))
+	mux.Handle("/.captcha/", cfg.CAPTCHA.Handler("/.captcha/"))
+	mux.Handle("/.csp-report", cspreport.Handler)
 	mux.Handle("/.service-nexus/", servicenexus.Handler(h2))
-	return context.ClearHandler(mux)
+	return context.ClearHandler(errorhandler.Handler(mux))
 }
 
 func (cfg *Config) redirectHTTPS(rw http.ResponseWriter, req *http.Request) {

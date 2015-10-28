@@ -161,3 +161,7 @@ func (s *store) Delete(sessionID storage.ID) error {
 
 	return nil
 }
+
+func init() {
+	gob.Register(time.Time{})
+}
