@@ -4,6 +4,7 @@ import "hash"
 import "crypto/hmac"
 import "crypto/sha256"
 import "crypto/subtle"
+import "crypto/rand"
 import "encoding/base64"
 import "github.com/hlandau/degoutils/web/session"
 import "github.com/hlandau/degoutils/web/tpl"
@@ -22,7 +23,13 @@ func GenAC(req *http.Request, target string) string {
 	// bytes of which are XORed with the v6-mapped IP address. (currently not used)
 	ak := session.Bytes(req, "user_ak", nil)
 	if len(ak) == 0 {
-		return ""
+		ak = make([]byte, 32)
+		_, err := rand.Read(ak)
+		if err != nil {
+			panic(err)
+		}
+
+		session.Set(req, "user_ak", ak)
 	}
 
 	return GenACFor(target, ak)
@@ -43,8 +50,12 @@ func VerifyAC(req *http.Request, ac string) bool {
 }
 
 func ProtectAC(f func(rw http.ResponseWriter, req *http.Request)) http.Handler {
+	return ProtectACn("ac", f)
+}
+
+func ProtectACn(fieldName string, f func(rw http.ResponseWriter, req *http.Request)) http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-		ac := req.FormValue("ac")
+		ac := req.FormValue(fieldName)
 		if !VerifyAC(req, ac) {
 			rw.WriteHeader(400)
 			tpl.Show(req, "error/400", nil)

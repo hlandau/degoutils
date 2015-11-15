@@ -2,12 +2,15 @@ package session
 
 import "fmt"
 import "net/http"
+import "strings"
 
-//import "github.com/hlandau/degoutils/web"
 import "github.com/hlandau/degoutils/web/session/storage"
 import "github.com/hlandau/degoutils/log"
 import "github.com/gorilla/context"
 import "github.com/hlandau/degoutils/web/origin"
+import "gopkg.in/hlandau/easyconfig.v1/cflag"
+
+var cookieNameFlag = cflag.String(nil, "sessioncookiename", "s", "Session cookie name")
 
 type Config struct {
 	CookieName string
@@ -54,15 +57,16 @@ func getContext(req *http.Request) *ctx {
 }
 
 var errBadSession = fmt.Errorf("bad session")
+var errNoSession = fmt.Errorf("no session")
 
-func (c *ctx) loadSession() error {
+func (c *ctx) loadSessionInner() error {
 	if c.loaded {
 		return nil
 	}
 
-	cookie, err := c.req.Cookie("fang_s")
+	cookie, err := c.req.Cookie("s")
 	if err != nil {
-		return errBadSession
+		return errNoSession
 	}
 
 	sc, err := storage.DecodeCookie(cookie.Value, c.cfg.SecretKey)
@@ -95,16 +99,53 @@ func (c *ctx) loadSession() error {
 	return nil
 }
 
+func (c *ctx) loadSession() error {
+	err := c.loadSessionInner()
+	if err == errBadSession {
+		c.writeSessionCookieRaw("")
+	}
+
+	return err
+}
+
 func (c *ctx) writeSessionCookie(sc storage.Cookie) {
-	cookie := http.Cookie{
-		Name:     "fang_s",
-		Value:    sc.Encode(c.cfg.SecretKey),
+	c.writeSessionCookieRaw(sc.Encode(c.cfg.SecretKey))
+}
+
+func (c *ctx) writeSessionCookieRaw(v string) {
+	maxAge := 0
+	if v == "" {
+		maxAge = -1
+	}
+
+	ck := http.Cookie{
+		Name:     cookieNameFlag.Value(),
+		Value:    v,
 		Path:     "/",
+		MaxAge:   maxAge,
 		Secure:   origin.IsSSL(c.req),
 		HttpOnly: true,
 	}
 
-	c.rw.Header().Add("Set-Cookie", cookie.String())
+	replaceCookie(c.rw, &ck)
+}
+
+func replaceCookie(rw http.ResponseWriter, c *http.Cookie) {
+	if c.Name != "" {
+		s := rw.Header()["Set-Cookie"]
+		for i := 0; i < len(s); i++ {
+			idx := strings.IndexByte(s[i], '=')
+			if idx < 0 {
+				continue
+			}
+			k := s[i][0:idx]
+			if k == c.Name {
+				s = append(s[0:i], s[i+1:]...)
+			}
+		}
+		rw.Header()["Set-Cookie"] = s
+	}
+	http.SetCookie(rw, c)
 }
 
 func (c *ctx) newSession() {

@@ -3,6 +3,7 @@ package xlogconfig
 import "github.com/hlandau/xlog"
 import "gopkg.in/hlandau/easyconfig.v1/cflag"
 import "os"
+import _ "github.com/hlandau/degoutils/buildinfo"
 
 var (
 	flagGroup          = cflag.NewGroup(nil, "xlog")

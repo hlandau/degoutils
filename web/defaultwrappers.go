@@ -151,7 +151,7 @@ func (cfg *Config) Listen(h http.Handler) error {
 	cfg.mustInit()
 	cfg.HTTPServer.Handler = cfg.Handler(h)
 	if opts.DevMode {
-		cfg.HTTPServer.Timeout = 1 * time.Second
+		cfg.HTTPServer.Timeout = 10 * time.Millisecond
 	} else {
 		cfg.HTTPServer.Timeout = 30 * time.Second
 	}
