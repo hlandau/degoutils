@@ -53,6 +53,11 @@ func setSeverity() {
 	}
 
 	xlog.Root.SetSeverity(sev)
+
+	xlog.VisitSites(func(s xlog.Site) error {
+		s.SetSeverity(sev)
+		return nil
+	})
 }
 
 // Parse registered configurables and setup logging.
