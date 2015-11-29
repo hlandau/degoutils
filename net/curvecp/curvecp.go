@@ -5,6 +5,7 @@ package curvecp
 import "io"
 import "crypto/rand"
 import "github.com/hlandau/degoutils/net/bsda"
+import "golang.org/x/net/context"
 import "golang.org/x/crypto/nacl/box"
 import "golang.org/x/crypto/curve25519"
 import "bytes"
@@ -13,7 +14,7 @@ import "encoding/binary"
 import "crypto/subtle"
 import "sync"
 import "sync/atomic"
-import "net"
+import denet "github.com/hlandau/degoutils/net"
 
 // Initiation parameters for CurveCP session.
 type Config struct {
@@ -25,8 +26,8 @@ type Config struct {
 
 	Rand io.Reader // if nil, crypto/rand is used
 
-	// Used only by Dial. If nil, net.Dial is used.
-	DialFunc func(net, addr string) (net.Conn, error)
+	// Used only by Dial. If nil, denet.DefaultDialer is used.
+	Dialer denet.Dialer
 }
 
 // CurveCP connection.
@@ -57,23 +58,23 @@ type Conn struct {
 // Utility function to dial an address and create a connection on it.
 //
 // net should almost certainly be "tcp". You must set Curvek and CurveS.
-func Dial(netw, addr string, cfg Config) (*Conn, error) {
-	df := cfg.DialFunc
-	if df == nil {
-		df = net.Dial
+func Dial(netw, addr string, cfg Config, ctx context.Context) (*Conn, error) {
+	d := cfg.Dialer
+	if d == nil {
+		d = denet.DefaultDialer
 	}
 
-	conn, err := df(netw, addr)
+	conn, err := d.Dial(netw, addr, ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	return New(bsda.New(conn), cfg)
+	return New(bsda.New(conn), cfg, ctx)
 }
 
 // Initiate a CurveCP connection over a reliable ordered bidirectional
 // point-to-point datagram stream.
-func New(conn bsda.FrameReadWriterCloser, cfg Config) (*Conn, error) {
+func New(conn bsda.FrameReadWriterCloser, cfg Config, ctx context.Context) (*Conn, error) {
 	c := &Conn{
 		cfg:  cfg,
 		conn: conn,
@@ -84,7 +85,7 @@ func New(conn bsda.FrameReadWriterCloser, cfg Config) (*Conn, error) {
 		c.cfg.Rand = rand.Reader
 	}
 
-	err := c.handshake()
+	err := c.handshake(ctx)
 	if err != nil {
 		c.conn.Close()
 		return nil, err
@@ -146,17 +147,17 @@ func keyIsZero(k *[32]byte) bool {
 }
 
 //
-func (c *Conn) handshake() error {
+func (c *Conn) handshake(ctx context.Context) error {
 	if c.cfg.IsServer {
-		return c.handshakeAsServer()
+		return c.handshakeAsServer(ctx)
 	} else {
-		return c.handshakeAsClient()
+		return c.handshakeAsClient(ctx)
 	}
 }
 
 // Server Handshaking
 
-func (c *Conn) handshakeAsServer() error {
+func (c *Conn) handshakeAsServer(ctx context.Context) error {
 	// Check that a private key has actually been specified.
 	c.curves = c.cfg.Curvek
 	if keyIsZero(&c.curves) {
@@ -327,7 +328,7 @@ func (c *Conn) hsReadClientCommence() error {
 
 // Client Handshaking
 
-func (c *Conn) handshakeAsClient() error {
+func (c *Conn) handshakeAsClient(context context.Context) error {
 	// Check that keys have actually been specified.
 	c.curvec = c.cfg.Curvek
 	c.curveS = c.cfg.CurveS

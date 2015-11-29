@@ -139,14 +139,11 @@ var guessPaths = []string{
 }
 
 func autodetectSendmail() {
-	defer func() {
-		triedAutodetection = true
-	}()
-
 	if triedAutodetection || sendmailPathFlag.Value() != "" {
 		return
 	}
 
+	triedAutodetection = true
 	p, err := exec.LookPath("sendmail")
 	if err == nil {
 		p2, err := filepath.Abs(p)

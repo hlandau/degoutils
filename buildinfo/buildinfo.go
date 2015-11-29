@@ -43,5 +43,5 @@ func Full() string {
 	if bi == "" {
 		bi = "build unknown"
 	}
-	return fmt.Sprintf("%sgo version %s %s/%s %s\n%s\n", Extra, runtime.Version(), runtime.GOOS, runtime.GOARCH, runtime.Compiler, bi)
+	return fmt.Sprintf("%sgo version %s %s/%s %s cgo=%v\n%s\n", Extra, runtime.Version(), runtime.GOOS, runtime.GOARCH, runtime.Compiler, Cgo, bi)
 }

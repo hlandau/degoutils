@@ -1,12 +1,15 @@
 package tpl
 
-import "os"
 import "path/filepath"
 import "github.com/flosch/pongo2"
 import "fmt"
 import "github.com/hlandau/xlog"
 import "net/http"
 import "github.com/hlandau/degoutils/web/miscctx"
+import "github.com/hlandau/degoutils/web/opts"
+import "github.com/hlandau/degoutils/vfs"
+import "github.com/hlandau/degoutils/binarc"
+import "io"
 
 var log, Log = xlog.New("web.tpl")
 
@@ -17,7 +20,7 @@ func GetTemplate(name string) *pongo2.Template {
 }
 
 func loadTemplates(dirname string) (map[string]*pongo2.Template, error) {
-	dir, err := os.Open(dirname)
+	dir, err := vfs.Open(dirname)
 	if err != nil {
 		return nil, err
 	}
@@ -58,6 +61,15 @@ func loadTemplates(dirname string) (map[string]*pongo2.Template, error) {
 }
 
 func LoadTemplates(dirname string) error {
+	err := binarc.Setup(opts.BaseDir)
+	if err != nil {
+		return err
+	}
+
+	pongo2.OpenFunc = func(name string) (io.ReadCloser, error) {
+		return vfs.Open(name)
+	}
+
 	c, err := loadTemplates(dirname)
 	if err != nil {
 		return err

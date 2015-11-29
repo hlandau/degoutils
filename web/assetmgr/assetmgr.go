@@ -12,6 +12,7 @@ import "os"
 import "encoding/binary"
 import "encoding/base64"
 import "sync"
+import "github.com/hlandau/degoutils/vfs"
 
 var log, Log = xlog.New("web.assetmgr")
 
@@ -59,9 +60,12 @@ func New(cfg Config) (*Manager, error) {
 		files:      make(map[string]*file),
 	}
 
-	err := notify.Watch(filepath.Join(m.cfg.Path, "..."), m.eventsChan, notify.InCloseWrite)
-	if err != nil {
-		return nil, err
+	_, err := os.Stat(m.cfg.Path)
+	if err == nil {
+		err := notify.Watch(filepath.Join(m.cfg.Path, "..."), m.eventsChan, notify.InCloseWrite)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	go m.notifyLoop()
@@ -125,7 +129,7 @@ func (m *Manager) scanFile(path string) (*file, error) {
 	fpath := filepath.Join(m.cfg.Path, path)
 	f.fullpath = fpath
 
-	fi, err := os.Stat(fpath)
+	fi, err := vfs.Stat(fpath)
 	if err != nil {
 		log.Debug("cannot find asset with path: ", fpath)
 		return f, nil

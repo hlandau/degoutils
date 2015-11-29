@@ -28,7 +28,7 @@ func (b *Base64up) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return err
 	}
-	*b, err = base64.URLEncoding.DecodeString(repad(s))
+	*b, err = base64.URLEncoding.DecodeString(RepadBase64(s))
 	return err
 }
 
@@ -36,9 +36,18 @@ func (b Base64up) MarshalJSON() ([]byte, error) {
 	return json.Marshal(strings.TrimRight(base64.URLEncoding.EncodeToString(b), "="))
 }
 
-func repad(s string) string {
+func RepadBase64(s string) string {
 	if m := len(s) % 4; m >= 2 {
 		return s + "=="[m-2:]
+	}
+
+	return s
+}
+
+// untested
+func RepadBase32(s string) string {
+	if m := len(s) % 8; m >= 6 {
+		return s + "======"[m-6:]
 	}
 
 	return s

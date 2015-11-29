@@ -1,10 +1,10 @@
 package assetmgr
 
 import "net/http"
-import "os"
 import "time"
 import "fmt"
 import "strings"
+import "github.com/hlandau/degoutils/vfs"
 
 var ErrNotFound = fmt.Errorf("static file not found")
 var ErrUnsupportedMethod = fmt.Errorf("unsupported method")
@@ -39,7 +39,7 @@ func (m *Manager) TryHandle(rw http.ResponseWriter, req *http.Request) error {
 	}
 
 	fpath := info.FullPath()
-	f, err := os.Open(fpath)
+	f, err := vfs.Open(fpath)
 	if err != nil {
 		return err
 	}
