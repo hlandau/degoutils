@@ -42,7 +42,7 @@ var maxDatagramSize int = getMaxDatagramSize()
 // datagram to be received of a size unrepresentable by the integer return
 // type of the Read method, which is supposed to represent the number of
 // bytes read. This is a bug in the Go standard library. Therefore, this
-// implementation cannot support reception of datagrams larger than 2**31-1,
+// implementation cannot support reception of datagrams larger than 2**31-1.
 // The determined maximum receive size is capped at 2**31-2. Subtracting an
 // extra byte from the maximum receive size allows one to determine whether a
 // packet may have exceeded the limitation of the Go API; such packets can
