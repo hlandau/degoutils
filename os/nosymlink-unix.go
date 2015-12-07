@@ -7,6 +7,6 @@ import (
 	"syscall"
 )
 
-func openNoSymlinks(path string) (*os.File, error) {
-	return os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
+func openFileNoSymlinks(path string, flags int, mode os.FileMode) (*os.File, error) {
+	return os.OpenFile(path, flags|syscall.O_NOFOLLOW, mode)
 }

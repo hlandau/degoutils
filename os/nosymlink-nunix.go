@@ -9,6 +9,6 @@ import (
 
 var errNoSymlinksNotSupported = errors.New("opening files without following symlinks is not supported on this platform")
 
-func openNoSymlinks(path string) (*os.File, error) {
+func openFileNoSymlinks(path string, flags int, mode os.FileMode) (*os.File, error) {
 	return nil, errNoSymlinksNotSupported
 }
