@@ -4,14 +4,15 @@ import "encoding/base64"
 import "golang.org/x/crypto/nacl/secretbox"
 import "crypto/rand"
 
-var errorEncryptionKey = [32]byte{47, 10, 181, 208, 144, 131, 217, 3, 142, 89, 158, 11, 133, 223, 34, 122, 231, 78, 10, 89, 77, 176, 202, 157, 164, 26, 2, 243, 3, 11, 187, 218}
+// To be changed by specific initializers.
+var ErrorEncryptionKey = [32]byte{47, 10, 181, 208, 144, 131, 217, 3, 142, 89, 158, 11, 133, 223, 34, 122, 231, 78, 10, 89, 77, 176, 202, 157, 164, 26, 2, 243, 3, 11, 187, 218}
 
 func encryptError(info []byte) []byte {
 	out := []byte{18, 147, 175, 43}
 	var nonce [24]byte
 	rand.Read(nonce[:])
 	out = append(out, nonce[:]...)
-	out = secretbox.Seal(out, info, &nonce, &errorEncryptionKey)
+	out = secretbox.Seal(out, info, &nonce, &ErrorEncryptionKey)
 	return out
 }
 
