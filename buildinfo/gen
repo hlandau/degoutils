@@ -1,4 +1,5 @@
 #!/bin/bash
 [ -z "$BUILDNAME" ] && BUILDNAME="$(date -u "+%Y%m%d%H%M%S") on $(hostname -f)"
-BUILDINFO="$((echo built $BUILDNAME; go list -f '{{range $imp := .Deps}}{{printf "%s\n" $imp}}{{end}}' "$1" | sort -u | xargs go list -f '{{if not .Standard}}{{.ImportPath}}{{end}}' | awk "{print \"$GOPATH/src/\" \$0}" | (while read line; do x="$line"; while [ ! -e "$x/.git" -a ! -e "$x/.hg" ]; do x=${x%/*}; if [ "$x" = "" ]; then break; fi; done; echo "$x"; done) | sort -u | (while read line; do echo git ${line#$GOPATH/src/} $(git -C "$line" rev-parse HEAD) $(git -C "$line" describe --all --dirty=+ --abbrev=99 --always); done)) | base64 -w 0)"
+BUILDINFO="$((echo built $BUILDNAME; go list -f '{{range $imp := .Deps}}{{printf "%s\n" $imp}}{{end}}' "$1" | sort -u | xargs go list -f '{{if not .Standard}}{{.ImportPath}}{{end}}' | awk "{print \"$GOPATH/src/\" \$0}" | (while read line; do x="$line"; while [ ! -e "$x/.git" -a ! -e "$x/.hg" ]; do x=${x%/*}; if [ "$x" = "" ]; then break; fi; done; echo "$x"; done) | sort -u | (while read line; do echo git ${line#$GOPATH/src/} $(git -C "$line" rev-parse HEAD) $(git -C "$line" describe --all --dirty=+ --abbrev=99 --always); done)) | base64 | tr -d '\n')"
+# (base64 -w 0 doesn't work on busybox, so use base64 | tr -d '\n' instead)
 echo -X github.com/hlandau/degoutils/buildinfo.RawBuildInfo=$BUILDINFO
