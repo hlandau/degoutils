@@ -9,9 +9,9 @@ var (
 	flagGroup          = cflag.NewGroup(nil, "xlog")
 	logSeverityFlag    = cflag.String(flagGroup, "severity", "NOTICE", "log severity (any syslog severity name or number)")
 	logFileFlag        = cflag.String(flagGroup, "file", "", "log to filename")
-	fileSeverityFlag   = cflag.String(flagGroup, "fileseverity", "DEBUG", "file logging severity limit")
+	fileSeverityFlag   = cflag.String(flagGroup, "fileseverity", "TRACE", "file logging severity limit")
 	logStderrFlag      = cflag.Bool(flagGroup, "stderr", true, "log to stderr?")
-	stderrSeverityFlag = cflag.String(flagGroup, "stderrseverity", "DEBUG", "stderr logging severity limit")
+	stderrSeverityFlag = cflag.String(flagGroup, "stderrseverity", "TRACE", "stderr logging severity limit")
 )
 
 func openStderr() {
