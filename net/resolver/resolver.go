@@ -28,12 +28,36 @@ func Query(q dns.Question, ctx context.Context) (*dns.Msg, error) {
 		return nil, err
 	}
 
-	var r *dns.Msg
-	for _, s := range servers {
-		// TODO: use context
-		r, _, err = cl.Exchange(m, s+":53")
-		if err == nil {
-			return r, nil
+	type txResult struct {
+		Response *dns.Msg
+		Err      error
+	}
+
+	maxTries := len(servers)
+	if maxTries < 3 {
+		maxTries = 3
+	}
+
+	for i := 0; i < maxTries; i++ {
+		s := servers[i%len(servers)]
+
+		txResultChan := make(chan txResult, 1)
+
+		go func() {
+			r, _, err := cl.Exchange(m, s+":53")
+			txResultChan <- txResult{r, err}
+		}()
+
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+
+		case txResult := <-txResultChan:
+			if txResult.Err == nil {
+				return txResult.Response, nil
+			}
+
+			err = txResult.Err
 		}
 	}
 
