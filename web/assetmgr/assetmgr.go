@@ -2,30 +2,35 @@
 // asset cachebusting tags as files are changed.
 package assetmgr
 
-import "github.com/hlandau/xlog"
-import "github.com/rjeczalik/notify"
-import "path/filepath"
-import "regexp"
-import "strings"
-import "time"
-import "os"
-import "encoding/binary"
-import "encoding/base64"
-import "sync"
-import "github.com/hlandau/degoutils/vfs"
+import (
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/binary"
+	"github.com/hlandau/degoutils/vfs"
+	"github.com/hlandau/xlog"
+	"github.com/rjeczalik/notify"
+	"io"
+	"os"
+	"path/filepath"
+	"regexp"
+	"sync"
+	"time"
+)
 
 var log, Log = xlog.New("web.assetmgr")
 
-var allDigits = regexp.MustCompilePOSIX(`^[0-9]+$`)
+var allDigits = regexp.MustCompile(`^[0-9]+$`)
 
 // Asset manager configuration.
 type Config struct {
 	Path string // Path to assets.
 }
 
+// Represents a known asset file.
 type file struct {
 	mtime    time.Time
 	tag      string
+	sha256   []byte
 	fullpath string
 }
 
@@ -35,6 +40,10 @@ func (f *file) ModTime() time.Time {
 
 func (f *file) Tag() string {
 	return f.tag
+}
+
+func (f *file) SHA256() []byte {
+	return f.sha256
 }
 
 func (f *file) FullPath() string {
@@ -91,7 +100,7 @@ func (m *Manager) fileChanged(name string) {
 	// Ignore filenames beginning with . (vim)
 	// Also ignore purely numeric filenames, which show up for some reason.
 	fn := filepath.Base(name)
-	if len(fn) == 0 || fn[0] == '.' || allDigits.MatchString(fn) {
+	if fn == "" || fn[0] == '.' || allDigits.MatchString(fn) {
 		return
 	}
 
@@ -124,24 +133,44 @@ func (m *Manager) addFile(path string) error {
 }
 
 func (m *Manager) scanFile(path string) (*file, error) {
-	f := &file{}
+	f := &file{
+		fullpath: filepath.Join(m.cfg.Path, path),
+	}
 
-	fpath := filepath.Join(m.cfg.Path, path)
-	f.fullpath = fpath
-
-	fi, err := vfs.Stat(fpath)
+	fh, err := vfs.Open(f.fullpath)
 	if err != nil {
-		log.Debug("cannot find asset with path: ", fpath)
+		log.Debuge(err, "cannot find asset with path: ", f.fullpath)
 		return f, nil
-		//return nil, err
+	}
+	defer fh.Close()
+
+	fi, err := fh.Stat()
+	if err != nil {
+		log.Debuge(err, "stat")
+		return f, nil
 	}
 
 	f.mtime = fi.ModTime()
-	b := make([]byte, 4)
-	binary.LittleEndian.PutUint32(b, uint32(f.mtime.Unix()&0xFFFFFFFF))
-	f.tag = strings.TrimRight(base64.URLEncoding.EncodeToString(b), "=")
+
+	h := sha256.New()
+	_, err = io.Copy(h, fh)
+	if err != nil {
+		log.Debuge(err, "copy")
+		return f, nil
+	}
+
+	hash := h.Sum(nil)
+	f.sha256 = hash
+	f.tag = base64.RawURLEncoding.EncodeToString(f.sha256)
+	//f.tag = timeToTag(f.mtime)
 
 	return f, nil
+}
+
+func timeToTag(t time.Time) string {
+	b := make([]byte, 4)
+	binary.LittleEndian.PutUint32(b, uint32(t.Unix()&0xFFFFFFFF))
+	return base64.RawURLEncoding.EncodeToString(b)
 }
 
 // Represents an asset.
@@ -151,6 +180,9 @@ type Info interface {
 
 	// Return cache invalidating hash tag.
 	Tag() string
+
+	// SHA256 hash of data.
+	SHA256() []byte
 
 	// Return path to asset.
 	FullPath() string
@@ -186,6 +218,16 @@ func (m *Manager) Tag(path string) string {
 	}
 
 	return i.Tag()
+}
+
+// Return SHA256 of file data or nil if file not found.
+func (m *Manager) SHA256(path string) []byte {
+	i := m.Info(path)
+	if i == nil {
+		return nil
+	}
+
+	return i.SHA256()
 }
 
 // Shut down the asset manager.

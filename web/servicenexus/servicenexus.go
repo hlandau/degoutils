@@ -1,26 +1,40 @@
+// Package servicenexus provides prefixed access to the net/http
+// DefaultServeMux, gated to admit only internal requests.
 package servicenexus
 
-import "net/http"
-import denet "github.com/hlandau/degoutils/net"
-import "github.com/hlandau/degoutils/web/origin"
-import "github.com/hlandau/degoutils/web/origin/originfuncs"
+import (
+	denet "github.com/hlandau/degoutils/net"
+	"github.com/hlandau/degoutils/web/origin"
+	"github.com/hlandau/degoutils/web/origin/originfuncs"
+	"net/http"
+	"strings"
+)
 
 func Handler(notFoundHandler http.Handler) http.Handler {
 	if notFoundHandler == nil {
 		notFoundHandler = http.HandlerFunc(http.NotFound)
 	}
 
-	sp := http.StripPrefix("/.service-nexus", http.DefaultServeMux)
+	// Don't use http.StripPrefix since we need to determine if it begins with
+	// the prefix first and fallback if it doesn't.
 	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-		if !CanAccess(req) {
+		p := strings.TrimPrefix(req.URL.Path, "/.service-nexus")
+		if len(p) >= len(req.URL.Path) || !CanAccess(req) {
 			notFoundHandler.ServeHTTP(rw, req)
 			return
 		}
 
-		sp.ServeHTTP(rw, req)
+		if p == "" {
+			p = "/"
+		}
+
+		req.URL.Path = p
+		http.DefaultServeMux.ServeHTTP(rw, req)
 	})
 }
 
+// Used to determine whether the service nexus can be accessed. Returns true if
+// ALL of the legs in the request have loopback or RFC1918 source IPs.
 func CanAccess(req *http.Request) bool {
 	return originfuncs.MatchAll(origin.Legs(req), ipCanAccess)
 }

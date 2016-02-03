@@ -1,3 +1,19 @@
+// Package errorhandler provides a panic handler for HTTP requests which serves
+// an error notice and optionally sends e. mail.
+//
+// Configurables:
+//
+//   'panicsto'          E. mail address to send panics to.
+//                       "" (default): don't send e. mails.
+//
+//   'webmasteraddress'  Webmaster e. mail address, shown in error notices.
+//                       "" (default): don't show webmaster e. mail address.
+//
+// Measurables:
+//
+//   'web.errorResponsesIssued'     Counter. Counts number of panics that the error handler
+//                                  has caught.
+//
 package errorhandler
 
 import "net/http"
@@ -23,6 +39,8 @@ var cErrorResponsesIssued = cexp.NewCounter("web.errorResponsesIssued")
 var panicsToFlag = cflag.String(nil, "panicsto", "", "E. mail address to send panics to")
 var webmasterAddressFlag = cflag.String(nil, "webmasteraddress", "", "Webmaster e. mail address (shown on panic)")
 
+// The error handling HTTP handler, wrapping an inner handler for which panics
+// are handled.
 func Handler(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		defer func() {
@@ -50,8 +68,9 @@ func renderError(rw http.ResponseWriter, req *http.Request, reqerr interface{}, 
 
 	cErrorResponsesIssued.Inc()
 
-	rw.Header().Set("Content-Type", "text/html")
+	rw.Header().Set("Content-Type", "text/html; charset=utf-8")
 	rw.Header().Del("Content-Security-Policy")
+	rw.Header().Del("Content-Security-Policy-Report-Only")
 	rw.WriteHeader(http.StatusInternalServerError)
 
 	type info struct {
@@ -158,13 +177,13 @@ const emergencyErrorTpl = `<!DOCTYPE html>
 
       <div class="info">
         <h2>Error Information</h2>
-<pre>{{if .Encrypted}}{{.EncryptedBlob}}{{else}}{{.Info}}{{end}}</pre>
+        <pre>{{if .Encrypted}}{{.EncryptedBlob}}{{else}}{{.Info}}{{end}}</pre>
       </div>
     </div>
   </body>
 </html>`
 
-const emergencyErrorEmailTpl = `A panic has occurred in fangwebd.
+const emergencyErrorEmailTpl = `A panic has occurred.
 
 Error information:
 ---------------------------------------------------------------------

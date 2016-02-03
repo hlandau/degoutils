@@ -5,12 +5,11 @@ import "github.com/russross/blackfriday"
 import "github.com/microcosm-cc/bluemonday"
 import "github.com/jackc/pgx"
 
-type Formatted struct {
-	StoredValue string
-}
+// Formatted represents a stored value which should be displayed formatted.
+type Formatted string
 
-func (f *Formatted) SafeHTML() *pongo2.Value {
-	return formatTextP2(f.StoredValue)
+func (f Formatted) SafeHTML() *pongo2.Value {
+	return formatTextP2(string(f))
 }
 
 func (f *Formatted) Scan(r *pgx.ValueReader) error {
@@ -18,7 +17,7 @@ func (f *Formatted) Scan(r *pgx.ValueReader) error {
 		return nil
 	}
 
-	f.StoredValue = r.ReadString(r.Len())
+	*f = Formatted(r.ReadString(r.Len()))
 	return r.Err()
 }
 

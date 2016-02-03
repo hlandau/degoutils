@@ -8,19 +8,27 @@ import "encoding/base64"
 import "fmt"
 
 // Represents a session reference to be encoded into a cookie.
-// The epoch may be bumped.
+// Such a cookie is a 2-tuple (ID, Epoch) which is HMAC-signed.
+//
+// The purpose of the epoch is to change the session cookie without changing
+// the session ID used for backend storage purposes. This may be done, for
+// example, on login or logout.  The epoch is stored in the session storage
+// backend, so a session cookie can be considered invalid if the epoch does not
+// match. The epoch is a monotonously increasing counter, and the sole
+// operation which should be performed on it is to increment it.
 type Cookie struct {
-	ID    ID
-	Epoch uint32
+	ID    ID     // Session ID as assigned by storage backend.
+	Epoch uint32 // Session Epoch, starts at zero.
 }
 
+// Increment the epoch.
 func (sc *Cookie) Bump() {
-	sc.Epoch += 1
+	sc.Epoch++
 }
 
-// Encodes the cookie into a form suitable for use in a cookie
-// (i.e. text). The cookie is MAC'd against tampering. The secret
-// key to use must be passed.
+// Encodes the cookie into a form suitable for use as a cookie value (i.e.
+// text). The cookie is MAC'd against tampering. The secret key to use for the
+// HMAC signature must be passed.
 func (sc *Cookie) Encode(secretKey []byte) string {
 	// The cookie format is:
 	//   [session ID][epoch as 4-byte unsigned little endian integer][HMAC]
@@ -36,6 +44,8 @@ func (sc *Cookie) Encode(secretKey []byte) string {
 
 var errBadCookie = fmt.Errorf("bad cookie")
 
+// Decodes a session cookie value. The HMAC signature is verified using the
+// secret key given, and the cookie is returned.
 func DecodeCookie(s string, secretKey []byte) (Cookie, error) {
 	buf, err := base64.StdEncoding.DecodeString(s)
 	if err != nil {

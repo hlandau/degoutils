@@ -84,7 +84,13 @@ func ReadDatagram(c net.Conn) (buf []byte, err error) {
 	return
 }
 
-func ReadDatagramFromUDP(c *net.UDPConn) (buf []byte, addr *net.UDPAddr, err error) {
+type UDPConn interface {
+	Close() error
+	ReadFromUDP(b []byte) (int, *net.UDPAddr, error)
+	WriteToUDP(b []byte, addr *net.UDPAddr) (int, error)
+}
+
+func ReadDatagramFromUDP(c UDPConn) (buf []byte, addr *net.UDPAddr, err error) {
 	bufx := make([]byte, maxDatagramSize+1)
 	n, addr, err := c.ReadFromUDP(bufx)
 	if n > maxDatagramSize {

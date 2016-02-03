@@ -1,12 +1,13 @@
-package web
+package miscctx
 
-import "net/http"
-import "html"
-import "fmt"
-import "github.com/hlandau/degoutils/web/miscctx"
+import (
+	"fmt"
+	"html"
+	"net/http"
+)
 
 func RedirectTo(req *http.Request, code int, url string) {
-	rw := miscctx.GetResponseWriter(req)
+	rw := GetResponseWriter(req)
 
 	rw.Header().Set("Location", url)
 	if req.Method == "GET" {

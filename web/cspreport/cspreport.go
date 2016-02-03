@@ -1,3 +1,5 @@
+// Package cspreport provides facilities for logging CSP and HPKP violation
+// reports.
 package cspreport
 
 import "time"
@@ -5,39 +7,14 @@ import "net/http"
 import "encoding/json"
 import "github.com/hlandau/xlog"
 
+// Logger which generates CSP and HPKP reports.
 var log, Log = xlog.New("web.cspreport")
 
+// HTTP handler which logs CSP and HPKP reports.
 var Handler http.Handler
 
 func init() {
 	Handler = http.HandlerFunc(handler)
-}
-
-type CSPReport struct {
-	Body struct {
-		BlockedURI         string `json:"blocked-uri"`
-		DocumentURI        string `json:"document-uri"`
-		EffectiveDirective string `json:"effective-directive"`
-		OriginalPolicy     string `json:"original-policy"`
-		Referrer           string `json:"referrer"`
-		StatusCode         int    `json:"status-code"`
-		ViolatedDirective  string `json:"violated-directive"`
-
-		SourceFile   string `json:"source-file"`
-		LineNumber   int    `json:"line-number"`
-		ColumnNumber int    `json:"column-number"`
-	} `json:"csp-report"`
-}
-
-type PKPReport struct {
-	DateTime                  time.Time `json:"date-time"`
-	Hostname                  string    `json:"hostname"`
-	Port                      int       `json:"port"`
-	EffectiveExpirationDate   time.Time `json:"effective-expiration-date"`
-	IncludeSubdomains         bool      `json:"include-subdomains"`
-	KnownPins                 []string  `json:"known-pins"`
-	ServedCertificateChain    []string  `json:"served-certificate-chain"`
-	ValidatedCertificateChain []string  `json:"validated-certificate-chain"`
 }
 
 func handler(rw http.ResponseWriter, req *http.Request) {
@@ -72,4 +49,33 @@ func pkpHandler(rw http.ResponseWriter, req *http.Request) {
 
 	log.Errorf("HPKP Violation: %#v", &r)
 	rw.WriteHeader(204)
+}
+
+// CSP report structure.
+type CSPReport struct {
+	Body struct {
+		BlockedURI         string `json:"blocked-uri"`
+		DocumentURI        string `json:"document-uri"`
+		EffectiveDirective string `json:"effective-directive"`
+		OriginalPolicy     string `json:"original-policy"`
+		Referrer           string `json:"referrer"`
+		StatusCode         int    `json:"status-code"`
+		ViolatedDirective  string `json:"violated-directive"`
+
+		SourceFile   string `json:"source-file"`
+		LineNumber   int    `json:"line-number"`
+		ColumnNumber int    `json:"column-number"`
+	} `json:"csp-report"`
+}
+
+// HPKP report structure.
+type PKPReport struct {
+	DateTime                  time.Time `json:"date-time"`
+	Hostname                  string    `json:"hostname"`
+	Port                      int       `json:"port"`
+	EffectiveExpirationDate   time.Time `json:"effective-expiration-date"`
+	IncludeSubdomains         bool      `json:"include-subdomains"`
+	KnownPins                 []string  `json:"known-pins"`
+	ServedCertificateChain    []string  `json:"served-certificate-chain"`
+	ValidatedCertificateChain []string  `json:"validated-certificate-chain"`
 }

@@ -1,3 +1,4 @@
+// Package tpl provides facilities for loading and displaying templates.
 package tpl
 
 import "path/filepath"
@@ -13,10 +14,36 @@ import "io"
 
 var log, Log = xlog.New("web.tpl")
 
+// Loaded templates.
 var templates = map[string]*pongo2.Template{}
 
+// Try to find a template with the given name. Returns nil if there is no such
+// template loaded.
 func GetTemplate(name string) *pongo2.Template {
 	return templates[name]
+}
+
+// Load all templates from the given directory. The templates must have the file extension ".p2".
+func LoadTemplates(dirname string) error {
+	err := binarc.Setup(opts.BaseDir)
+	if err != nil {
+		return err
+	}
+
+	pongo2.OpenFunc = func(name string) (io.ReadCloser, error) {
+		return vfs.Open(name)
+	}
+
+	c, err := loadTemplates(dirname)
+	if err != nil {
+		return err
+	}
+
+	for k, v := range c {
+		templates[k] = v
+	}
+
+	return nil
 }
 
 func loadTemplates(dirname string) (map[string]*pongo2.Template, error) {
@@ -60,38 +87,24 @@ func loadTemplates(dirname string) (map[string]*pongo2.Template, error) {
 	return compiled, nil
 }
 
-func LoadTemplates(dirname string) error {
-	err := binarc.Setup(opts.BaseDir)
-	if err != nil {
-		return err
-	}
+// Returned by TryShow if a template is not found.
+var ErrNotFound = fmt.Errorf("template not found")
 
-	pongo2.OpenFunc = func(name string) (io.ReadCloser, error) {
-		return vfs.Open(name)
-	}
-
-	c, err := loadTemplates(dirname)
-	if err != nil {
-		return err
-	}
-
-	for k, v := range c {
-		templates[k] = v
-	}
-
-	return nil
-}
-
-var ErrNotFound = fmt.Errorf("tpl not found")
-
-func Show(req *http.Request, name string, args map[string]interface{}) {
-	err := TryShow(req, name, args)
+// Show the template with the given name and args. Failure to render the template results
+// in a panic, which will ultimately result in a 500 response.
+func MustShow(req *http.Request, name string, args map[string]interface{}) {
+	err := Show(req, name, args)
 	log.Panice(err, "cannot render template ", name)
 }
 
+// If this is non-nil, the value returned by this function will always be set
+// as "c" in the args passed to Show.
 var GetContextFunc func(req *http.Request) interface{}
 
-func TryShow(req *http.Request, name string, args map[string]interface{}) error {
+// Try to show the template with the given name and args. Return an error on failure.
+//
+// The error might be ErrNotFound.
+func Show(req *http.Request, name string, args map[string]interface{}) error {
 	tpl, ok := templates[name]
 	if !ok {
 		return ErrNotFound
@@ -101,13 +114,16 @@ func TryShow(req *http.Request, name string, args map[string]interface{}) error 
 		args = map[string]interface{}{}
 	}
 
-	rw := miscctx.GetResponseWriter(req)
-	args["c"] = GetContextFunc(req)
+	if GetContextFunc != nil {
+		args["c"] = GetContextFunc(req)
+	}
 
+	rw := miscctx.GetResponseWriter(req)
 	err := tpl.ExecuteWriter(args, rw)
 	if err != nil {
 		return err
 	}
 
+	miscctx.SetCanOutputTime(req)
 	return nil
 }

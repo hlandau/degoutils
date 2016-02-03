@@ -1,3 +1,5 @@
+// Package origin provides utilities for determining the remote IP and SSL use
+// of HTTP connections in complex proxied backend environments.
 package origin
 
 import "net/http"

@@ -5,10 +5,16 @@ import (
 	"time"
 )
 
+type Ticker interface {
+	C() <-chan time.Time
+	Stop()
+}
+
 type Clock interface {
 	Now() time.Time
 	Sleep(time.Duration)
 	After(time.Duration) <-chan time.Time
+	NewTicker(time.Duration) Ticker
 }
 
 var Real Clock
@@ -29,6 +35,18 @@ func (realClock) Sleep(d time.Duration) {
 
 func (realClock) After(d time.Duration) <-chan time.Time {
 	return time.After(d)
+}
+
+func (realClock) NewTicker(d time.Duration) Ticker {
+	return realTicker{time.NewTicker(d)}
+}
+
+type realTicker struct {
+	*time.Ticker
+}
+
+func (rt realTicker) C() <-chan time.Time {
+	return rt.Ticker.C
 }
 
 type Fake interface {
@@ -79,6 +97,10 @@ func (f *fastFake) After(d time.Duration) <-chan time.Time {
 	c := make(chan time.Time, 1)
 	c <- f.Now()
 	return c
+}
+
+func (f *fastFake) NewTicker(d time.Duration) Ticker {
+	return newFakeTicker(f, d)
 }
 
 // A slow clock doesn't return from Sleep calls until Advance has been called
@@ -152,6 +174,45 @@ func (f *slowFake) After(d time.Duration) <-chan time.Time {
 
 	f.sleepers = append(f.sleepers, s)
 	return done
+}
+
+func (f *slowFake) NewTicker(d time.Duration) Ticker {
+	return newFakeTicker(f, d)
+}
+
+type fakeTicker struct {
+	clock    Clock
+	c        chan time.Time
+	stopChan chan struct{}
+}
+
+func newFakeTicker(c Clock, d time.Duration) Ticker {
+	ft := &fakeTicker{
+		clock:    c,
+		c:        make(chan time.Time, 1),
+		stopChan: make(chan struct{}),
+	}
+	go ft.tickLoop(d)
+	return ft
+}
+
+func (ft *fakeTicker) tickLoop(d time.Duration) {
+	for {
+		ft.clock.Sleep(d)
+		select {
+		case ft.c <- ft.clock.Now():
+		case <-ft.stopChan:
+			return
+		}
+	}
+}
+
+func (ft *fakeTicker) C() <-chan time.Time {
+	return ft.c
+}
+
+func (ft *fakeTicker) Stop() {
+	close(ft.stopChan)
 }
 
 // © 2015 Jonathan Boulle   Apache 2.0 License
