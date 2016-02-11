@@ -1,10 +1,13 @@
 package buildinfo
 
-import "encoding/base64"
-import "gopkg.in/hlandau/easyconfig.v1/cflag"
-import "os"
-import "fmt"
-import "runtime"
+import (
+	"encoding/base64"
+	"fmt"
+	"gopkg.in/hlandau/easyconfig.v1/cflag"
+	"os"
+	"runtime"
+	"strings"
+)
 
 // Full build info.
 var BuildInfo string
@@ -26,11 +29,11 @@ func init() {
 		os.Exit(2)
 	})
 
-	if RawBuildInfo == "" {
+	if RawBuildInfo == "" || BuildInfo != "" {
 		return
 	}
 
-	b, err := base64.StdEncoding.DecodeString(RawBuildInfo)
+	b, err := base64.RawStdEncoding.DecodeString(strings.TrimRight(RawBuildInfo, "="))
 	if err != nil {
 		return
 	}
