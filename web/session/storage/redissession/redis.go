@@ -3,12 +3,12 @@ package redissession
 
 import (
 	"bytes"
-	"code.google.com/p/go-uuid/uuid"
 	"encoding/gob"
 	"fmt"
 	"github.com/garyburd/redigo/redis"
 	"github.com/hlandau/degoutils/web/session/storage"
 	"github.com/hlandau/xlog"
+	"github.com/satori/go.uuid"
 	"time"
 )
 
@@ -57,7 +57,7 @@ var ErrUnsupportedVersion = fmt.Errorf("unsupported serialization version")
 
 // Returns key to store the given session ID at.
 func (s *store) makeKey(sessionID storage.ID) string {
-	return s.cfg.Prefix + uuid.UUID(sessionID).String()
+	return s.cfg.Prefix + uuid.FromBytesOrNil([]byte(sessionID)).String()
 }
 
 // Upsert set. If create is true, the session will be created if it does not
@@ -143,12 +143,9 @@ func (s *store) get(sessionID storage.ID) (*sess, error) {
 
 // Create a new session.
 func (s *store) Create() (sessionID storage.ID, err error) {
-	u := uuid.NewUUID()
-	if u == nil {
-		log.Panic("cannot create UUID")
-	}
+	u := uuid.NewV4()
 
-	sessionID_ := storage.ID([]byte(u))
+	sessionID_ := storage.ID(u.Bytes())
 	err = s.set(sessionID_, map[string]interface{}{}, true)
 	if err != nil {
 		return

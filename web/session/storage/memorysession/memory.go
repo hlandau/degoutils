@@ -2,7 +2,7 @@
 // used with a fallback backend, in which case it acts as a sort of cache.
 package memorysession
 
-import "code.google.com/p/go-uuid/uuid"
+import "github.com/satori/go.uuid"
 import "github.com/hlandau/degoutils/web/session/storage"
 import "github.com/hlandau/xlog"
 import "time"
@@ -103,12 +103,12 @@ func (s *store) Create() (sessionID storage.ID, err error) {
 
 	// resilience: go from memory on fallback store failure
 	if s.cfg.FallbackStore == nil || err != nil {
-		u := uuid.NewUUID()
+		u := uuid.NewV4()
 		if u == nil {
 			log.Panic("cannot create UUID")
 		}
 
-		sessionID = storage.ID([]byte(u))
+		sessionID = storage.ID(u.Bytes())
 	}
 
 	s.storeMutex.Lock()

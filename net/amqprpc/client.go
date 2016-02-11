@@ -2,7 +2,7 @@ package amqprpc
 
 import "github.com/streadway/amqp"
 import "gopkg.in/vmihailenco/msgpack.v2"
-import "code.google.com/p/go-uuid/uuid"
+import "github.com/satori/go.uuid"
 import "sync"
 import "time"
 import "fmt"
@@ -162,7 +162,7 @@ func (c *Client) Call(exchange, routingKey, method string, args map[string]inter
 		return nil, err
 	}
 
-	cid := uuid.New()
+	cid := uuid.NewV4().String()
 	rch := c.registerResponseChan(cid)
 
 	err = c.txChannel.Publish(exchange, routingKey,
