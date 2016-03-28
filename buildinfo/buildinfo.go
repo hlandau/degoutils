@@ -25,7 +25,7 @@ func init() {
 			return
 		}
 
-		fmt.Fprint(os.Stderr, Full())
+		fmt.Print(Full())
 		os.Exit(2)
 	})
 
