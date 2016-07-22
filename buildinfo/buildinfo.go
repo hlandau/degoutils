@@ -3,6 +3,7 @@ package buildinfo
 import (
 	"encoding/base64"
 	"fmt"
+	"github.com/hlandau/buildinfo"
 	"gopkg.in/hlandau/easyconfig.v1/cflag"
 	"os"
 	"runtime"
@@ -19,32 +20,21 @@ var RawBuildInfo string
 var Extra string
 
 func init() {
-	versionFlag := cflag.Bool(nil, "version", false, "Print version information")
-	versionFlag.RegisterOnChange(func(bf *cflag.BoolFlag) {
-		if !bf.Value() {
-			return
-		}
-
-		fmt.Print(Full())
-		os.Exit(2)
-	})
-
-	if RawBuildInfo == "" || BuildInfo != "" {
-		return
+	if RawBuildInfo != "" {
+		buildinfo.RawBuildInfo = RawBuildInfo
 	}
-
-	b, err := base64.RawStdEncoding.DecodeString(strings.TrimRight(RawBuildInfo, "="))
-	if err != nil {
-		return
+	if BuildInfo != "" {
+		buildinfo.BuildInfo = BuildInfo
 	}
-
-	BuildInfo = string(b)
+	if Extra != "" {
+		buildinfo.Extra = Extra
+	}
+	buildinfo.Update()
+	RawBuildInfo = buildinfo.RawBuildInfo
+	BuildInfo = buildinfo.BuildInfo
+	Extra = buildinfo.Extra
 }
 
 func Full() string {
-	bi := BuildInfo
-	if bi == "" {
-		bi = "build unknown"
-	}
-	return fmt.Sprintf("%sgo version %s %s/%s %s cgo=%v\n%s\n", Extra, runtime.Version(), runtime.GOOS, runtime.GOARCH, runtime.Compiler, Cgo, bi)
+	return buildinfo.Full()
 }
