@@ -1,14 +1,6 @@
 package buildinfo
 
-import (
-	"encoding/base64"
-	"fmt"
-	"github.com/hlandau/buildinfo"
-	"gopkg.in/hlandau/easyconfig.v1/cflag"
-	"os"
-	"runtime"
-	"strings"
-)
+import "github.com/hlandau/buildinfo"
 
 // Full build info.
 var BuildInfo string
